@@ -1,5 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
-const logger = require('./your-logging-service'); // Implement this based on your preferred logging solution
+const logger = console;
 
 const errorHandler = (err, req, res, next) => {
   const errorId = uuidv4();

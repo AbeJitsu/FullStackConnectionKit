@@ -19,7 +19,7 @@ connectDB();
 
 // Middleware
 const corsOptions = {
-  origin: process.env.CLIENT_URL || 'http://localhost:8080',
+  origin: process.env.SERVER_LOCAL_FRONTEND_URL || 'http://localhost:8080',
   optionsSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
