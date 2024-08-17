@@ -1,0 +1,16 @@
+{
+  "name": "fullstackconnectionkit",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install",
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:serve\"",
+    "server:dev": "cd server && npm run dev",
+    "client:serve": "cd client && npm run serve",
+    "start": "cd server && npm start",
+    "project-structure": "tree -L 9 -I 'node_modules|.git|.vscode|dist|*.css|*.map|*.woff*|*.svg|*.png|*.html|*.json|*.log'"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
