@@ -35,6 +35,7 @@
           <input v-model.trim="newItem.name" placeholder="Item name" required>
           <input v-model.trim="newItem.description" placeholder="Item description">
           <input v-model.number="newItem.quantity" type="number" placeholder="Quantity" required min="0">
+          <input v-model.number="newItem.price" type="number" placeholder="Price" required min="0" step="0.01">
           <button type="submit" :disabled="!isFormValid">Create Item</button>
         </form>
       </section>
@@ -43,7 +44,7 @@
         <h2>Items</h2>
         <ul v-if="items.length">
           <li v-for="item in items" :key="item._id">
-            {{ item.name }}: {{ item.description }} (Quantity: {{ item.quantity }})
+            {{ item.name }}: {{ item.description }} (Quantity: {{ item.quantity }}, Price: ${{ item.price }})
             <button @click="deleteItem(item._id)">Delete</button>
           </li>
         </ul>
@@ -75,11 +76,10 @@ export default {
       newItem: {
         name: '',
         description: '',
-        quantity: 0
+        quantity: 0,
+        price: 0
       },
-      apiUrl: process.env.VUE_APP_USE_CLOUD === "true"
-        ? process.env.VUE_APP_API_URL_CLOUD
-        : process.env.VUE_APP_API_URL_LOCAL,
+      apiUrl: 'http://localhost:3000',
     };
   },
   computed: {
@@ -87,7 +87,7 @@ export default {
       return this.items.reduce((total, item) => total + item.quantity, 0);
     },
     isFormValid() {
-      return this.newItem.name.trim() !== '' && this.newItem.quantity >= 0;
+      return this.newItem.name.trim() !== '' && this.newItem.quantity >= 0 && this.newItem.price >= 0;
     }
   },
   async mounted() {
@@ -105,18 +105,19 @@ export default {
         this.loading = false;
       } catch (error) {
         console.error("Error fetching info:", error);
-        this.connectionStatus = "Error connecting to server";
+        this.connectionStatus = `Error connecting to server: ${error.response?.status} ${error.response?.statusText || error.message}`;
         this.loading = false;
       }
     },
     async createItem() {
+      console.log('Sending item:', this.newItem);
       try {
         await axios.post(`${this.apiUrl}/api/items`, this.newItem);
         this.connectionStatus = "Item created successfully";
-        this.newItem = { name: '', description: '', quantity: 0 };
+        this.newItem = { name: '', description: '', quantity: 0, price: 0 };
         await this.fetchItems();
       } catch (error) {
-        this.connectionStatus = "Error creating item: " + (error.response?.data?.message || error.message);
+        this.connectionStatus = `Error creating item: ${error.response?.status} ${error.response?.statusText || error.message}`;
       }
     },
     async fetchItems() {
@@ -126,7 +127,7 @@ export default {
         this.connectionStatus = "Items fetched successfully";
       } catch (error) {
         console.error('Error fetching items:', error);
-        this.connectionStatus = "Error fetching items: " + (error.response?.data?.message || error.message);
+        this.connectionStatus = `Error fetching items: ${error.response?.status} ${error.response?.statusText || error.message}`;
       }
     },
     async deleteItem(id) {
@@ -135,7 +136,7 @@ export default {
         this.connectionStatus = "Item deleted successfully";
         await this.fetchItems();
       } catch (error) {
-        this.connectionStatus = "Error deleting item: " + (error.response?.data?.message || error.message);
+        this.connectionStatus = `Error deleting item: ${error.response?.status} ${error.response?.statusText || error.message}`;
       }
     },
     async testDatabase() {
@@ -143,7 +144,7 @@ export default {
         const response = await axios.get(`${this.apiUrl}/api/info/database-status`);
         this.databaseStatus = `Database is ${response.data.status}`;
       } catch (error) {
-        this.databaseStatus = `Database test failed: ${error.message}`;
+        this.databaseStatus = `Database test failed: ${error.response?.status} ${error.response?.statusText || error.message}`;
       }
     },
     testWebSocket() {
@@ -165,7 +166,7 @@ export default {
         const postResponse = await axios.post(`${this.apiUrl}/api/cors-test`, { test: 'data' });
         this.corsStatus = `GET: ${getResponse.data.message}\nPOST: ${postResponse.data.message}`;
       } catch (error) {
-        this.corsStatus = `CORS test failed: ${error.message}`;
+        this.corsStatus = `CORS test failed: ${error.response?.status} ${error.response?.statusText || error.message}`;
       }
     },
   },

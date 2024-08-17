@@ -29,7 +29,7 @@ const getSystemInfo = () => ({
 // Helper function to get database info
 const getDatabaseInfo = () => ({
   connected: mongoose.connection.readyState === 1,
-  uri: process.env.MONGODB_URI
+  uri: process.env.SERVER_LOCAL_DATABASE_URL
     ? 'Connected (URI masked for security)'
     : 'Not provided',
   name: mongoose.connection.name,

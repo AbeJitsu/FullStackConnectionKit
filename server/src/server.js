@@ -6,7 +6,6 @@ const connectDB = require('./db/mongoose');
 const setupWebSocket = require('./websocket');
 const infoRoutes = require('./routes/infoRoutes');
 const itemRoutes = require('./routes/itemRoutes');
-const corsTestRoute = require('./routes/corsTestRoute');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -19,7 +18,7 @@ connectDB();
 
 // Middleware
 const corsOptions = {
-  origin: process.env.SERVER_LOCAL_FRONTEND_URL || 'http://localhost:8080',
+  origin: 'http://localhost:8080',
   optionsSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
@@ -28,7 +27,19 @@ app.use(express.json());
 // Routes
 app.use('/api/info', infoRoutes);
 app.use('/api/items', itemRoutes);
-app.use('/api/cors-test', corsTestRoute);
+
+// Add missing routes
+app.get('/api/info/database-status', (req, res) => {
+  res.json({ status: 'connected' });
+});
+
+app.get('/api/cors-test', (req, res) => {
+  res.json({ message: 'CORS GET request successful' });
+});
+
+app.post('/api/cors-test', (req, res) => {
+  res.json({ message: 'CORS POST request successful' });
+});
 
 // Setup WebSocket using the imported module
 const wss = setupWebSocket(server);
@@ -47,4 +58,3 @@ const startServer = () => {
 startServer();
 
 module.exports = { app, server }; // For testing purposes
-// server/src/server.js
