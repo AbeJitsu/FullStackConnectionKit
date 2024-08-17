@@ -18,7 +18,10 @@ connectDB();
 
 // Middleware
 const corsOptions = {
-  origin: 'http://localhost:8080',
+  origin:
+    process.env.NODE_ENV === 'production'
+      ? process.env.SERVER_CLOUD_FRONTEND_URL
+      : 'http://localhost:8080',
   optionsSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
