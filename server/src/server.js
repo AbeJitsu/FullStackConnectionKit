@@ -18,11 +18,20 @@ connectDB();
 
 // Middleware
 const corsOptions = {
-  origin:
-    process.env.NODE_ENV === 'production'
-      ? process.env.SERVER_CLOUD_FRONTEND_URL
-      : 'http://localhost:8080',
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      process.env.SERVER_CLOUD_FRONTEND_URL,
+      'http://localhost:8080',
+      'https://full-stack-connection-gxgpj1izc-abe-reyes-projects.vercel.app',
+    ];
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   optionsSuccessStatus: 200,
+  credentials: true,
 };
 app.use(cors(corsOptions));
 app.use(express.json());
