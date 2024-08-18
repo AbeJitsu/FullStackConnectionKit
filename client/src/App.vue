@@ -1,7 +1,7 @@
 <template>
   <div id="app">
     <header>
-      <h1>FullStackConnectionKit Tester</h1>
+      <!-- <h1>FullStackConnectionKit Tester</h1> -->
     </header>
     <main>
       <ApiTester />
