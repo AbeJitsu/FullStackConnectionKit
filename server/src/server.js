@@ -21,8 +21,7 @@ const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = [
       process.env.SERVER_CLOUD_FRONTEND_URL,
-      'http://localhost:8080',
-      'https://full-stack-connection-gxgpj1izc-abe-reyes-projects.vercel.app',
+      process.env.SERVER_LOCAL_FRONTEND_URL,
     ];
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
@@ -34,6 +33,21 @@ const corsOptions = {
   credentials: true,
 };
 app.use(cors(corsOptions));
+
+// Add additional CORS headers dynamically
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin === process.env.SERVER_CLOUD_FRONTEND_URL || origin === process.env.SERVER_LOCAL_FRONTEND_URL) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header(
+    'Access-Control-Allow-Headers',
+    'Origin, X-Requested-With, Content-Type, Accept'
+  );
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  next();
+});
+
 app.use(express.json());
 
 // Routes
