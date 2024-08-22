@@ -1,205 +1,208 @@
 <template>
   <div class="api-tester">
     <h1>FullStackConnectionKit API Tester</h1>
-    <div v-if="loading">Loading...</div>
-    <div v-else>
-      <section class="info">
+    <div v-if="loading" class="loading">Loading...</div>
+    <div v-else class="dashboard-grid">
+      <section class="dashboard-item system-info">
         <h2>System Information</h2>
-        <p><strong>Client:</strong> {{ clientInfo }}</p>
-        <p><strong>Server:</strong> {{ serverInfo.port }}</p>
-        <p><strong>Database:</strong> {{ databaseInfo.uri }}</p>
-        <p><strong>API Connection Status:</strong> {{ connectionStatus }}</p>
+        <div class="info-grid">
+          <p v-for="(info, key) in sections[0].info" :key="key">
+            <strong>{{ key }}:</strong> {{ info }}
+          </p>
+        </div>
       </section>
 
-      <section class="database-test">
-        <h2>Database Test</h2>
-        <button @click="testDatabase">Test Database Connection</button>
-        <p>{{ databaseStatus }}</p>
+      <section class="dashboard-item api-tests">
+        <h2>API Tests</h2>
+        <div class="test-group">
+          <h3>Database Test</h3>
+          <button @click="testDatabase" class="action-button">Test Database Connection</button>
+          <p class="status">{{ databaseStatus }}</p>
+        </div>
+        <div class="test-group">
+          <h3>WebSocket Test</h3>
+          <button @click="testWebSocket" class="action-button">Test WebSocket</button>
+          <p class="status">{{ websocketStatus }}</p>
+        </div>
+        <div class="test-group">
+          <h3>CORS Test</h3>
+          <button @click="testCORS" class="action-button">Test CORS</button>
+          <p class="status">{{ corsStatus }}</p>
+        </div>
       </section>
 
-      <section class="websocket-test">
-        <h2>WebSocket Test</h2>
-        <button @click="testWebSocket">Test WebSocket</button>
-        <p>{{ websocketStatus }}</p>
-      </section>
+      
 
-      <section class="cors-test">
-        <h2>CORS Test</h2>
-        <button @click="testCORS">Test CORS</button>
-        <p>{{ corsStatus }}</p>
-      </section>
+      <section class="dashboard-item create-item">
+  <h2>Create Item</h2>
+  <form @submit.prevent="createItem">
+    <div class="form-group">
+      <label for="item-name">Item name:</label>
+      <input id="item-name" v-model="newItem.name" type="text" required />
+    </div>
+    <div class="form-group">
+      <label for="item-description">Description:</label>
+      <input id="item-description" v-model="newItem.description" type="text" />
+    </div>
+    <div class="form-group">
+      <label for="item-quantity">Quantity:</label>
+      <input id="item-quantity" v-model.number="newItem.quantity" type="number" required min="0" />
+    </div>
+    <div class="form-group">
+      <label for="item-price">Price:</label>
+      <input id="item-price" v-model.number="newItem.price" type="number" required min="0" step="0.01" />
+    </div>
+    <button type="submit" :disabled="!isFormValid" class="submit-button">Create Item</button>
+  </form>
+</section>
 
-      <section class="item-creator">
-        <h2>Create Item</h2>
-        <form @submit.prevent="createItem">
-          <input
-            v-model.trim="newItem.name"
-            placeholder="Item name"
-            required
-          />
-          <input
-            v-model.trim="newItem.description"
-            placeholder="Item description"
-          />
-          <input
-            v-model.number="newItem.quantity"
-            type="number"
-            placeholder="Quantity"
-            required
-            min="0"
-          />
-          <input
-            v-model.number="newItem.price"
-            type="number"
-            placeholder="Price"
-            required
-            min="0"
-            step="0.01"
-          />
-          <button
-            type="submit"
-            :disabled="!isFormValid"
-          >
-            Create Item
-          </button>
-        </form>
-      </section>
-
-      <section class="item-list">
+      <section class="dashboard-item item-list">
         <h2>Items</h2>
         <ul v-if="items.length">
-          <li
-            v-for="item in items"
-            :key="item._id"
-          >
-            {{ item.name }}: {{ item.description }} (Quantity:
-            {{ item.quantity }}, Price: ${{ item.price }})
-            <button @click="deleteItem(item._id)">Delete</button>
+          <li v-for="item in items" :key="item._id">
+            {{ item.name }}: {{ item.description }} (Quantity: {{ item.quantity }}, Price: ${{ item.price }})
+            <button @click="deleteItem(item._id)" class="delete-button">Delete</button>
           </li>
         </ul>
         <p v-else>No items found.</p>
         <p><strong>Total Quantity:</strong> {{ totalQuantity }}</p>
+        <button @click="fetchItems" class="refresh-button">Refresh Items</button>
       </section>
 
-      <button @click="fetchItems">Refresh Items</button>
+    
     </div>
   </div>
 </template>
 
 <script>
-  import axios from 'axios';
+import axios from 'axios';
 
-  export default {
-    name: 'ApiTester',
-    data() {
-      const useCloud = process.env.VUE_APP_USE_CLOUD === 'true';
-      const apiUrl = useCloud
-        ? process.env.VUE_APP_API_URL_CLOUD
-        : process.env.VUE_APP_API_URL_LOCAL;
-      console.log('useCloud:', useCloud);
-      console.log('apiUrl:', apiUrl);
+const axiosInstance = axios.create({
+  withCredentials: true,
+});
 
-      return {
-        loading: true,
-        clientInfo: `Running on ${window.location.origin}`,
-        serverInfo: {},
-        databaseInfo: {},
-        connectionStatus: 'Not connected',
-        databaseStatus: '',
-        websocketStatus: '',
-        corsStatus: '',
-        items: [],
-        newItem: {
-          name: '',
-          description: '',
-          quantity: 0,
-          price: 0,
+export default {
+  name: 'ApiTester',
+  data() {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const apiUrl = isProduction
+      ? process.env.VUE_APP_API_URL_CLOUD
+      : process.env.VUE_APP_API_URL_LOCAL;
+
+    return {
+      loading: true,
+      apiUrl,
+      clientInfo: `Running on ${window.location.origin}`,
+      serverInfo: {},
+      databaseInfo: {},
+      connectionStatus: 'Not connected',
+      databaseStatus: '',
+      websocketStatus: '',
+      corsStatus: '',
+      items: [],
+      newItem: {
+        name: '',
+        description: '',
+        quantity: 0,
+        price: 0,
+      },
+    };
+  },
+  computed: {
+    totalQuantity() {
+      return this.items.reduce((total, item) => total + item.quantity, 0);
+    },
+    isFormValid() {
+      return (
+        this.newItem.name.trim() !== '' &&
+        this.newItem.quantity >= 0 &&
+        this.newItem.price >= 0
+      );
+    },
+    sections() {
+      return [
+        {
+          title: 'System Information',
+          info: {
+            Client: this.clientInfo,
+            Server: this.serverInfo.port,
+            Database: this.databaseInfo.uri,
+            'API Connection Status': this.connectionStatus,
+          },
         },
-        apiUrl: apiUrl,
-      };
+      ];
     },
-    computed: {
-      totalQuantity() {
-        return this.items.reduce((total, item) => total + item.quantity, 0);
-      },
-      isFormValid() {
-        return (
-          this.newItem.name.trim() !== '' &&
-          this.newItem.quantity >= 0 &&
-          this.newItem.price >= 0
-        );
-      },
+  },
+  async mounted() {
+    await this.fetchInfo();
+    await this.fetchItems();
+    this.loading = false;
+  },
+  methods: {
+    async apiCall(method, url, data = null) {
+      try {
+        console.log(`Making ${method.toUpperCase()} request to ${url}`);
+        if (data) {
+          console.log('Request data:', JSON.stringify(data, null, 2));
+        }
+        const response = await axiosInstance[method](url, data);
+        console.log('Response:', response.data);
+        return response.data;
+      } catch (error) {
+        console.error(`Error in API call (${method} ${url}):`, error);
+        if (error.response) {
+          console.error('Response data:', error.response.data);
+        }
+        throw error;
+      }
     },
-    async mounted() {
-      await this.fetchInfo();
-      await this.fetchItems();
+    async fetchInfo() {
+      try {
+        const { serverInfo, databaseInfo } = await this.apiCall('get', `${this.apiUrl}/api/info`);
+        this.serverInfo = serverInfo;
+        this.databaseInfo = databaseInfo;
+        this.connectionStatus = 'Connected successfully';
+      } catch (error) {
+        this.connectionStatus = `Error connecting to server: ${error.response?.status} ${error.response?.statusText || error.message}`;
+      }
     },
-    methods: {
-      async fetchInfo() {
-        try {
-          const response = await axios.get(`${this.apiUrl}/api/info`);
-          const { serverInfo, databaseInfo } = response.data;
-          this.serverInfo = serverInfo;
-          this.databaseInfo = databaseInfo;
-          this.connectionStatus = 'Connected successfully';
-          this.loading = false;
-        } catch (error) {
-          console.error('Error fetching info:', error);
-          this.connectionStatus = `Error connecting to server: ${
-            error.response?.status
-          } ${error.response?.statusText || error.message}`;
-          this.loading = false;
-        }
-      },
-      async createItem() {
-        console.log('Sending item:', this.newItem);
-        try {
-          await axios.post(`${this.apiUrl}/api/items`, this.newItem);
-          this.connectionStatus = 'Item created successfully';
-          this.newItem = { name: '', description: '', quantity: 0, price: 0 };
-          await this.fetchItems();
-        } catch (error) {
-          this.connectionStatus = `Error creating item: ${
-            error.response?.status
-          } ${error.response?.statusText || error.message}`;
-        }
-      },
-      async fetchItems() {
-        try {
-          const response = await axios.get(`${this.apiUrl}/api/items`);
-          this.items = response.data.items;
-          this.connectionStatus = 'Items fetched successfully';
-        } catch (error) {
-          console.error('Error fetching items:', error);
-          this.connectionStatus = `Error fetching items: ${
-            error.response?.status
-          } ${error.response?.statusText || error.message}`;
-        }
-      },
-      async deleteItem(id) {
-        try {
-          await axios.delete(`${this.apiUrl}/api/items/${id}`);
-          this.connectionStatus = 'Item deleted successfully';
-          await this.fetchItems();
-        } catch (error) {
-          this.connectionStatus = `Error deleting item: ${
-            error.response?.status
-          } ${error.response?.statusText || error.message}`;
-        }
-      },
-      async testDatabase() {
-        try {
-          const response = await axios.get(
-            `${this.apiUrl}/api/info/database-status`
-          );
-          this.databaseStatus = `Database is ${response.data.status}`;
-        } catch (error) {
-          this.databaseStatus = `Database test failed: ${
-            error.response?.status
-          } ${error.response?.statusText || error.message}`;
-        }
-      },
-      testWebSocket() {
+    async createItem() {
+      try {
+        await this.apiCall('post', `${this.apiUrl}/api/items`, this.newItem);
+        this.connectionStatus = 'Item created successfully';
+        this.newItem = { name: '', description: '', quantity: 0, price: 0 };
+        await this.fetchItems();
+      } catch (error) {
+        this.connectionStatus = `Error creating item: ${error.response?.status} ${error.response?.statusText || error.message}`;
+      }
+    },
+    async fetchItems() {
+      try {
+        const { items } = await this.apiCall('get', `${this.apiUrl}/api/items`);
+        this.items = items;
+        this.connectionStatus = 'Items fetched successfully';
+      } catch (error) {
+        this.connectionStatus = `Error fetching items: ${error.response?.status} ${error.response?.statusText || error.message}`;
+      }
+    },
+    async deleteItem(id) {
+      try {
+        await this.apiCall('delete', `${this.apiUrl}/api/items/${id}`);
+        this.connectionStatus = 'Item deleted successfully';
+        await this.fetchItems();
+      } catch (error) {
+        this.connectionStatus = `Error deleting item: ${error.response?.status} ${error.response?.statusText || error.message}`;
+      }
+    },
+    async testDatabase() {
+      try {
+        const { status } = await this.apiCall('get', `${this.apiUrl}/api/info/database-status`);
+        this.databaseStatus = `Database is ${status}`;
+      } catch (error) {
+        this.databaseStatus = `Database test failed: ${error.response?.status} ${error.response?.statusText || error.message}`;
+      }
+    },
+    testWebSocket() {
       const isProduction = process.env.NODE_ENV === 'production';
       const protocol = isProduction ? 'wss://' : 'ws://';
       const host = isProduction ? window.location.host : `${window.location.hostname}:${process.env.VUE_APP_BACKEND_PORT}`;
@@ -219,68 +222,177 @@
         this.websocketStatus = `WebSocket error: ${error.message}`;
       };
     },
-      async testCORS() {
-        try {
-          const getResponse = await axios.get(`${this.apiUrl}/api/cors-test`);
-          const postResponse = await axios.post(
-            `${this.apiUrl}/api/cors-test`,
-            { test: 'data' }
-          );
-          this.corsStatus = `GET: ${getResponse.data.message}\nPOST: ${postResponse.data.message}`;
-        } catch (error) {
-          this.corsStatus = `CORS test failed: ${error.response?.status} ${
-            error.response?.statusText || error.message
-          }`;
-        }
-      },
+    async testCORS() {
+      try {
+        const getResponse = await this.apiCall('get', `${this.apiUrl}/api/cors-test`);
+        const postResponse = await this.apiCall('post', `${this.apiUrl}/api/cors-test`, { test: 'data' });
+        this.corsStatus = `GET: ${getResponse.message}\nPOST: ${postResponse.message}`;
+      } catch (error) {
+        this.corsStatus = `CORS test failed: ${error.response?.status} ${error.response?.statusText || error.message}`;
+      }
     },
-  };
+  },
+};
 </script>
 
 <style scoped>
-  .api-tester {
-    max-width: 600px;
-    margin: 0 auto;
-    padding: 20px;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+.api-tester {
+  max-width: 1200px;
+  min-width: 70%;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: Arial, sans-serif;
+  background-color: #f0f0f0;
+}
+
+h1 {
+  text-align: center;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: auto auto;
+  gap: 20px;
   }
-  h1,
-  h2 {
-    color: #333;
+
+.dashboard-item {
+  border-radius: 10px;
+  padding: 15px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.system-info {
+  background-color: #e6f3ff;
+}
+
+.api-tests {
+  background-color: #ffe6e6;
+}
+
+.create-item {
+  background-color: #e6ffe6;
+}
+
+.item-list {
+  background-color: #fff6e6;
+}
+
+h2 {
+  color: #333;
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.2em;
+}
+
+button {
+  background-color: #333;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+button:hover {
+  background-color: #555;
+  transform: scale(1.05);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+input {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  box-sizing: border-box;
+}
+
+.input-group {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.input-group label {
+  flex: 0 0 80px;
+}
+
+.input-group input {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+li {
+  background-color: white;
+  border-radius: 5px;
+  padding: 10px;
+    border-radius: 5px; /* Rounded edges */
+    margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.delete-button {
+  background-color: #ff6b6b;
+  padding: 5px 10px;
+  font-size: 0.9em;
+}
+
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.refresh-button {
+  background-color: #4CAF50;
+}
+
+.loading {
+  text-align: center;
+  font-size: 1.2em;
+  margin-top: 50px;
+}
+
+@media (max-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
   }
-  section {
-    margin-bottom: 20px;
-  }
-  button,
-  input {
-    width: 100%;
-    margin: 5px 0;
+}
+
+.form-group {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    flex: 0 0 100px; /* Adjust this width as needed for your labels */
+    margin-right: 10px; /* Space between label and input */
+    text-align: right;
+}
+
+.form-group input {
+    flex: 1;
     padding: 8px;
     border: 1px solid #ddd;
-    border-radius: 4px;
-  }
-  button {
-    background-color: #4caf50;
-    color: white;
-    cursor: pointer;
-  }
-  button:hover {
-    background-color: #45a049;
-  }
-  button:disabled {
-    background-color: #ddd;
-    cursor: not-allowed;
-  }
-  ul {
-    list-style-type: none;
-    padding: 0;
-  }
-  li {
-    margin-bottom: 10px;
-    padding: 10px;
-    background-color: #f9f9f9;
-    border-radius: 4px;
-  }
+    border-radius: 5px;
+}
+
+.submit-button {
+    margin-left: 110px; /* Aligns with input fields */
+}
 </style>

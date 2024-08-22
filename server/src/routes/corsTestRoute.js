@@ -1,7 +1,10 @@
-// server/src/routes/corsTestRoute.js
 const express = require('express');
 const router = express.Router();
 const errorHandler = require('../middleware/errorHandler');
+const { handleCors } = require('../utils/corsConfig');
+
+// Apply CORS to all routes in this file
+handleCors(router);
 
 // Async handler wrapper
 const asyncHandler = (fn) => (req, res, next) =>
@@ -11,6 +14,10 @@ const asyncHandler = (fn) => (req, res, next) =>
 router.get(
   '/',
   asyncHandler(async (req, res) => {
+    console.log('Received GET request:', {
+      origin: req.headers.origin,
+      method: req.method,
+    });
     res.json({
       message: 'CORS GET request successful',
       timestamp: new Date().toISOString(),
@@ -24,6 +31,10 @@ router.get(
 router.post(
   '/',
   asyncHandler(async (req, res) => {
+    console.log('Received POST request:', {
+      origin: req.headers.origin,
+      method: req.method,
+    });
     res.json({
       message: 'CORS POST request successful',
       timestamp: new Date().toISOString(),
@@ -38,6 +49,10 @@ router.post(
 router.put(
   '/',
   asyncHandler(async (req, res) => {
+    console.log('Received PUT request:', {
+      origin: req.headers.origin,
+      method: req.method,
+    });
     res.json({
       message: 'CORS PUT request successful',
       timestamp: new Date().toISOString(),
@@ -52,6 +67,10 @@ router.put(
 router.delete(
   '/',
   asyncHandler(async (req, res) => {
+    console.log('Received DELETE request:', {
+      origin: req.headers.origin,
+      method: req.method,
+    });
     res.json({
       message: 'CORS DELETE request successful',
       timestamp: new Date().toISOString(),
@@ -65,6 +84,10 @@ router.delete(
 router.get(
   '/error',
   asyncHandler(async (req, res) => {
+    console.log('Received error test request:', {
+      origin: req.headers.origin,
+      method: req.method,
+    });
     throw new Error('This is a test error for CORS');
   })
 );
@@ -73,6 +96,10 @@ router.get(
 router.get(
   '/delay',
   asyncHandler(async (req, res) => {
+    console.log('Received delayed request:', {
+      origin: req.headers.origin,
+      method: req.method,
+    });
     await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second delay
     res.json({
       message: 'Delayed CORS response successful',

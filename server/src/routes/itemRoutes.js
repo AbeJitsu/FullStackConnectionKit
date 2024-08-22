@@ -1,10 +1,25 @@
 const express = require('express');
 const router = express.Router();
 const Item = require('../models/Item');
+const { handleCors } = require('../utils/corsConfig');
+
+// Apply CORS to all routes in this file
+handleCors(router);
 
 // Helper function for error handling
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
+
+// Logging middleware
+const logRequest = (req, res, next) => {
+  console.log(`${req.method} request to ${req.originalUrl}`, {
+    origin: req.headers.origin,
+    'user-agent': req.headers['user-agent'],
+  });
+  next();
+};
+
+router.use(logRequest);
 
 // Get all items with pagination and filtering
 router.get(

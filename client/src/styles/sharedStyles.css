@@ -1,0 +1,120 @@
+/* src/styles/sharedStyles.css */
+
+:root {
+  --primary-color: #4caf50;
+  --primary-hover-color: #45a049;
+  --background-color: #e6f7ff;
+  --text-color: #333;
+  --subtext-color: #666;
+  --border-color: #ddd;
+  --status-background-color: #f8f8f8;
+}
+
+.styled-section {
+  background-color: var(--background-color);
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+.styled-h2 {
+  color: var(--text-color);
+  margin-bottom: 20px;
+  font-size: 24px;
+}
+
+.styled-h3 {
+  color: var(--subtext-color);
+  margin-bottom: 10px;
+  font-size: 18px;
+}
+
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 10px;
+}
+
+.styled-label {
+  font-weight: bold;
+  margin-bottom: 5px;
+  color: var(--subtext-color);
+}
+
+.styled-value {
+  color: var(--text-color);
+}
+
+.test-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.styled-button {
+  background-color: var(--primary-color);
+  color: white;
+  padding: 10px 15px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s;
+}
+
+.styled-button:hover {
+  background-color: var(--primary-hover-color);
+}
+
+.status-display {
+  background-color: var(--status-background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: 10px;
+  font-family: monospace;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.styled-input {
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-header {
+  background-color: var(--background-color);
+  color: var(--text-color);
+  padding: 10px;
+  text-align: left;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.table-cell {
+  padding: 10px;
+  border-bottom: 1px solid var(--border-color);
+}

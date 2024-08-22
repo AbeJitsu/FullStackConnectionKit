@@ -4,6 +4,10 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const os = require('os');
 const errorHandler = require('../middleware/errorHandler');
+const { handleCors } = require('../utils/corsConfig');
+
+// Apply CORS to all routes in this file
+handleCors(router);
 
 // Helper function to get system info
 const getSystemInfo = () => ({
@@ -38,14 +42,25 @@ const getDatabaseInfo = () => ({
   models: Object.keys(mongoose.models),
 });
 
-// Async handler wrapper
+// Async handler wrapper with logging
 const asyncHandler = (fn) => (req, res, next) =>
-  Promise.resolve(fn(req, res, next)).catch(next);
+  Promise.resolve(fn(req, res, next))
+    .catch(next)
+    .finally(() => {
+      console.log(`${req.method} request to ${req.originalUrl}`, {
+        origin: req.headers.origin,
+        'user-agent': req.headers['user-agent'],
+      });
+    });
 
 // Main info route
 router.get(
   '/',
   asyncHandler(async (req, res) => {
+    console.log('Received request for main info route:', {
+      origin: req.headers.origin,
+      method: req.method,
+    });
     const serverInfo = {
       message: 'Server is running and connected to the database',
       serverInfo: {

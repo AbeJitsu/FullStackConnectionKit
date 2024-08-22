@@ -4,8 +4,14 @@ const logger = console;
 const errorHandler = (err, req, res, next) => {
   const errorId = uuidv4();
 
-  // Log the error with the unique identifier
-  logger.error(`Error ID ${errorId}:`, err);
+  // Log the error with the unique identifier and request details
+  logger.error(`Error ID ${errorId}:`, {
+    error: err,
+    method: req.method,
+    url: req.url,
+    origin: req.headers.origin,
+    'user-agent': req.headers['user-agent'],
+  });
 
   // Set default values
   let status = err.status || 500;
@@ -33,6 +39,10 @@ const errorHandler = (err, req, res, next) => {
     status = 409;
     message = 'Duplicate entry';
     errorCode = 'DUPLICATE_ENTRY';
+  } else if (err.message === 'Not allowed by CORS') {
+    status = 403;
+    message = 'CORS error: Origin not allowed';
+    errorCode = 'CORS_ERROR';
   }
 
   // Prepare the error response
