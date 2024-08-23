@@ -1,7 +1,6 @@
 const cors = require('cors');
 
 const allowedOrigins = [
-  'https://full-stack-connection-kit.vercel.app',
   process.env.SERVER_CLOUD_FRONTEND_URL,
   process.env.SERVER_LOCAL_FRONTEND_URL,
 ].filter(Boolean);
@@ -35,9 +34,12 @@ const handleCors = (app) => {
 
   // Explicit CORS headers for additional security
   app.use((req, res, next) => {
-    res.header(
-      'Access-Control-Allow-Origin'
-    );
+    // Temporary testing configuration
+    if (process.env.CORS_TESTING === 'true') {
+      res.header('Access-Control-Allow-Origin', '*');
+    } else {
+      res.header('Access-Control-Allow-Origin');
+    }
     res.header(
       'Access-Control-Allow-Methods',
       'GET, POST, PUT, DELETE, OPTIONS'
@@ -58,6 +60,12 @@ const validateCorsSetup = () => {
     !process.env.SERVER_LOCAL_FRONTEND_URL
   ) {
     console.warn('WARNING: Some CORS environment variables are not set');
+  }
+
+  if (process.env.CORS_TESTING === 'true') {
+    console.warn(
+      'WARNING: CORS testing mode is enabled. Do not use in production!'
+    );
   }
 };
 

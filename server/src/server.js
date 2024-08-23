@@ -19,9 +19,6 @@ validateCorsSetup();
 // Apply CORS middleware
 handleCors(app);
 
-// Connect to the database
-connectDB();
-
 // Debug logging
 app.use((req, res, next) => {
   console.log(`Incoming request:`, {
@@ -32,6 +29,9 @@ app.use((req, res, next) => {
   });
   next();
 });
+
+// Connect to the database
+connectDB();
 
 // Other middleware
 app.use(express.json());
