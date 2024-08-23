@@ -1,19 +1,19 @@
 <template>
-  <section class="dashboard-item api-tests">
+  <section class="panel api-tests">
     <h2>API Tests</h2>
     <div class="test-group">
       <h3>Database Test</h3>
-      <button @click="testDatabase" class="action-button">Test Database Connection</button>
+      <button @click="testDatabase" class="button button-green">Test Database Connection</button>
       <p class="status">{{ databaseStatus }}</p>
     </div>
     <div class="test-group">
       <h3>WebSocket Test</h3>
-      <button @click="testWebSocket" class="action-button">Test WebSocket</button>
+      <button @click="testWebSocket" class="button button-green">Test WebSocket</button>
       <p class="status">{{ websocketStatus }}</p>
     </div>
     <div class="test-group">
       <h3>CORS Test</h3>
-      <button @click="testCORS" class="action-button">Test CORS</button>
+      <button @click="testCORS" class="button button-green">Test CORS</button>
       <p class="status">{{ corsStatus }}</p>
     </div>
   </section>
@@ -104,27 +104,5 @@ export default {
 </script>
 
 <style scoped>
-.api-tests {
-  background-color: #ffe6e6;
-}
-
-.test-group {
-  margin-bottom: 20px;
-}
-
-h3 {
-  margin-bottom: 10px;
-}
-
-.action-button {
-  margin-bottom: 10px;
-}
-
-.status {
-  background-color: #fff;
-  padding: 10px;
-  border-radius: 5px;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
+@import '../styles/sharedStyles.css';
 </style>

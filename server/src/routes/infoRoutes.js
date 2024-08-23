@@ -3,11 +3,6 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const os = require('os');
-const errorHandler = require('../middleware/errorHandler');
-const { handleCors } = require('../utils/corsConfig');
-
-// Apply CORS to all routes in this file
-handleCors(router);
 
 // Helper function to get system info
 const getSystemInfo = () => ({
@@ -126,8 +121,5 @@ router.get(
     res.json(process.env);
   })
 );
-
-// Apply error handler to all routes
-router.use(errorHandler);
 
 module.exports = router;

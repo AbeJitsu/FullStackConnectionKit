@@ -1,10 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const errorHandler = require('../middleware/errorHandler');
-const { handleCors } = require('../utils/corsConfig');
-
-// Apply CORS to all routes in this file
-handleCors(router);
 
 // Async handler wrapper
 const asyncHandler = (fn) => (req, res, next) =>
@@ -107,9 +103,6 @@ router.get(
     });
   })
 );
-
-// Apply error handler to all routes
-router.use(errorHandler);
 
 module.exports = router;
 // server/src/routes/corsTestRoute.js

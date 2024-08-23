@@ -1,10 +1,7 @@
+// server/src/routes/itemRoutes.js
 const express = require('express');
 const router = express.Router();
 const Item = require('../models/Item');
-const { handleCors } = require('../utils/corsConfig');
-
-// Apply CORS to all routes in this file
-handleCors(router);
 
 // Helper function for error handling
 const asyncHandler = (fn) => (req, res, next) =>
@@ -78,11 +75,9 @@ router.post(
     const { name, description, quantity, price, category } = req.body;
 
     if (!name || typeof quantity !== 'number' || typeof price !== 'number') {
-      return res
-        .status(400)
-        .json({
-          message: 'Name, valid quantity, and valid price are required',
-        });
+      return res.status(400).json({
+        message: 'Name, valid quantity, and valid price are required',
+      });
     }
 
     const newItem = new Item({ name, description, quantity, price, category });
@@ -162,4 +157,5 @@ router.patch(
 );
 
 module.exports = router;
+
 // server/src/routes/ItemRoutes.js

@@ -8,6 +8,16 @@ const itemRoutes = require('./routes/itemRoutes');
 const errorHandler = require('./middleware/errorHandler');
 const { corsMiddleware, handleCors } = require('./utils/corsConfig');
 
+// Check for CORS environment variables
+if (
+  !process.env.SERVER_CLOUD_FRONTEND_URL ||
+  !process.env.SERVER_LOCAL_FRONTEND_URL
+) {
+  console.warn(
+    'WARNING: CORS allowed origins not fully configured. Check your environment variables.'
+  );
+}
+
 const app = express();
 const server = http.createServer(app);
 

@@ -1,16 +1,20 @@
 const cors = require('cors');
 
+const allowedOrigins = [
+  process.env.SERVER_CLOUD_FRONTEND_URL,
+  process.env.SERVER_LOCAL_FRONTEND_URL,
+].filter(Boolean); // Filter out any undefined values
+
 const corsOptions = {
   origin: (origin, callback) => {
-    const allowedOrigins = [
-      process.env.SERVER_CLOUD_FRONTEND_URL,
-      process.env.SERVER_LOCAL_FRONTEND_URL,
-    ];
-    if (allowedOrigins.includes(origin)) {
+    console.log('Received request from origin:', origin);
+    console.log('Allowed origins:', allowedOrigins);
+
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.error(`CORS error: Origin ${origin} not allowed`);
-      console.error(`Allowed origins: ${allowedOrigins.join(', ')}`);
+      console.warn(`CORS warning: Origin ${origin} not allowed`);
+      console.warn(`Allowed origins: ${allowedOrigins.join(', ')}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
