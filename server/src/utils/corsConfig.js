@@ -1,9 +1,10 @@
 const cors = require('cors');
 
 const allowedOrigins = [
+  'https://full-stack-connection-kit.vercel.app',
   process.env.SERVER_CLOUD_FRONTEND_URL,
   process.env.SERVER_LOCAL_FRONTEND_URL,
-].filter(Boolean); // Filter out any undefined values
+].filter(Boolean);
 
 const corsOptions = {
   origin: (origin, callback) => {
@@ -19,16 +20,45 @@ const corsOptions = {
     }
   },
   credentials: true,
-  optionsSuccessStatus: 200,
+  optionsSuccessStatus: 204,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  maxAge: 86400,
 };
 
 const corsMiddleware = cors(corsOptions);
 
-const handleCors = (router) => {
-  router.use(corsMiddleware);
-  router.options('*', corsMiddleware);
+const handleCors = (app) => {
+  app.use(corsMiddleware);
+  app.options('*', corsMiddleware);
+
+  // Explicit CORS headers for additional security
+  app.use((req, res, next) => {
+    res.header(
+      'Access-Control-Allow-Origin'
+    );
+    res.header(
+      'Access-Control-Allow-Methods',
+      'GET, POST, PUT, DELETE, OPTIONS'
+    );
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    next();
+  });
 };
 
-module.exports = { corsMiddleware, handleCors };
+const validateCorsSetup = () => {
+  if (allowedOrigins.length === 0) {
+    console.error('ERROR: No allowed origins specified for CORS');
+    process.exit(1);
+  }
+
+  if (
+    !process.env.SERVER_CLOUD_FRONTEND_URL ||
+    !process.env.SERVER_LOCAL_FRONTEND_URL
+  ) {
+    console.warn('WARNING: Some CORS environment variables are not set');
+  }
+};
+
+module.exports = { corsMiddleware, handleCors, validateCorsSetup };

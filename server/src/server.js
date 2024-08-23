@@ -6,29 +6,21 @@ const setupWebSocket = require('./websocket');
 const infoRoutes = require('./routes/infoRoutes');
 const itemRoutes = require('./routes/itemRoutes');
 const errorHandler = require('./middleware/errorHandler');
-const { corsMiddleware, handleCors } = require('./utils/corsConfig');
-
-// Check for CORS environment variables
-if (
-  !process.env.SERVER_CLOUD_FRONTEND_URL ||
-  !process.env.SERVER_LOCAL_FRONTEND_URL
-) {
-  console.warn(
-    'WARNING: CORS allowed origins not fully configured. Check your environment variables.'
-  );
-}
+const { handleCors, validateCorsSetup } = require('./utils/corsConfig');
 
 const app = express();
 const server = http.createServer(app);
 
 const PORT = process.env.PORT || 3000;
 
-// Connect to the database
-connectDB();
+// Validate CORS setup
+validateCorsSetup();
 
 // Apply CORS middleware
-app.use(corsMiddleware);
 handleCors(app);
+
+// Connect to the database
+connectDB();
 
 // Debug logging
 app.use((req, res, next) => {
