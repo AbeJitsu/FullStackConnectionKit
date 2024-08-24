@@ -1,4 +1,11 @@
 {
+  "version": 2,
+  "builds": [{ "src": "api/**/*.js", "use": "@vercel/node" }],
+  "routes": [
+    { "src": "/api/info(.*)", "dest": "/api/info.js" },
+    { "src": "/api/items(.*)", "dest": "/api/items.js" },
+    { "src": "/api/cors-test(.*)", "dest": "/api/cors-test.js" }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",
