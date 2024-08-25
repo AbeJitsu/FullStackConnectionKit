@@ -16,7 +16,6 @@
         :apiCall="apiCall"
         :apiUrl="apiUrl"
         @database-status="updateDatabaseStatus"
-        @websocket-status="updateWebsocketStatus"
         @cors-status="updateCorsStatus"
       />
 
@@ -86,7 +85,6 @@ export default {
       databaseInfo: {},
       connectionStatus: 'Not connected',
       databaseStatus: '',
-      websocketStatus: '',
       corsStatus: '',
       items: [],
       newItem: {
@@ -185,9 +183,6 @@ export default {
     },
     updateDatabaseStatus(status) {
       this.databaseStatus = status;
-    },
-    updateWebsocketStatus(status) {
-      this.websocketStatus = status;
     },
     updateCorsStatus(status) {
       this.corsStatus = status;

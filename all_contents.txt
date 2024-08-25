@@ -1,0 +1,1684 @@
+File: ./server/src/middleware/errorHandler.js
+const { v4: uuidv4 } = require('uuid');
+const logger = console;
+
+const errorHandler = (err, req, res, next) => {
+  const errorId = uuidv4();
+
+  // Log the error with the unique identifier and request details
+  logger.error(`Error ID ${errorId}:`, {
+    error: err,
+    method: req.method,
+    url: req.url,
+    origin: req.headers.origin,
+    'user-agent': req.headers['user-agent'],
+  });
+
+  // Set default values
+  let status = err.status || 500;
+  let message =
+    process.env.NODE_ENV === 'production'
+      ? 'An unexpected error occurred'
+      : err.message || 'An unexpected error occurred';
+  let errorCode = err.code || 'INTERNAL_SERVER_ERROR';
+
+  // Handle specific error types
+  if (err.name === 'ValidationError') {
+    status = 400;
+    message =
+      process.env.NODE_ENV === 'production'
+        ? 'Validation error'
+        : Object.values(err.errors)
+            .map((val) => val.message)
+            .join(', ');
+    errorCode = 'VALIDATION_ERROR';
+  } else if (err.name === 'CastError') {
+    status = 400;
+    message = 'Invalid input';
+    errorCode = 'INVALID_INPUT';
+  } else if (err.code === 11000) {
+    status = 409;
+    message = 'Duplicate entry';
+    errorCode = 'DUPLICATE_ENTRY';
+  } else if (err.message === 'Not allowed by CORS') {
+    status = 403;
+    message = 'CORS error: Origin not allowed';
+    errorCode = 'CORS_ERROR';
+  }
+
+  // Prepare the error response
+  const errorResponse = {
+    status: 'error',
+    errorCode,
+    message,
+    errorId,
+    timestamp: new Date().toISOString(),
+  };
+
+  // Include additional information in development environment
+  if (process.env.NODE_ENV === 'development') {
+    errorResponse.stack = err.stack;
+    if (err.message !== message) {
+      errorResponse.originalError = err.message;
+    }
+  }
+
+  // Send the error response
+  res.status(status).json(errorResponse);
+};
+
+module.exports = errorHandler;
+End of file: ./server/src/middleware/errorHandler.js
+
+File: ./server/src/server.js
+const express = require('express');
+const http = require('http');
+require('dotenv').config();
+const connectDB = require('./db/mongoose');
+const setupWebSocket = require('./websocket');
+const infoRoutes = require('./routes/infoRoutes');
+const itemRoutes = require('./routes/itemRoutes');
+const errorHandler = require('./middleware/errorHandler');
+const { handleCors, validateCorsSetup } = require('./utils/corsConfig');
+
+const app = express();
+
+// Validate CORS setup
+validateCorsSetup();
+
+// Apply CORS middleware
+handleCors(app);
+
+// Debug logging
+app.use((req, res, next) => {
+  console.log(`Incoming request:`, {
+    method: req.method,
+    url: req.url,
+    origin: req.headers.origin,
+    'user-agent': req.headers['user-agent'],
+  });
+  next();
+});
+
+// Middleware
+app.use(express.json());
+
+// Connect to the database
+app.use(async (req, res, next) => {
+  if (!global.mongoose) {
+    global.mongoose = await connectDB();
+  }
+  next();
+});
+
+// Routes
+app.use('/api/info', infoRoutes);
+app.use('/api/items', itemRoutes);
+
+// Additional routes
+app.get('/api/info/database-status', (req, res) => {
+  res.json({ status: 'connected' });
+});
+
+app.get('/api/cors-test', (req, res) => {
+  res.json({ message: 'CORS GET request successful' });
+});
+
+app.post('/api/cors-test', (req, res) => {
+  res.json({ message: 'CORS POST request successful' });
+});
+
+// Error handling middleware
+app.use(errorHandler);
+
+// Serverless-compatible handler
+const serverlessHandler = async (req, res) => {
+  await app(req, res);
+};
+
+// Start server if not in a serverless environment
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 3000;
+  const server = http.createServer(app);
+
+  // Setup WebSocket
+  const wss = setupWebSocket(server);
+
+  server.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+    console.log(`WebSocket server is running on ws://localhost:${PORT}`);
+  });
+}
+
+module.exports = process.env.VERCEL ? serverlessHandler : app;
+End of file: ./server/src/server.js
+
+File: ./server/src/utils/corsConfig.js
+const cors = require('cors');
+
+const allowedOrigins = [
+  process.env.SERVER_CLOUD_FRONTEND_URL,
+  process.env.SERVER_LOCAL_FRONTEND_URL,
+].filter(Boolean);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    console.log('Received request from origin:', origin);
+    console.log('Allowed origins:', allowedOrigins);
+
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS warning: Origin ${origin} not allowed`);
+      console.warn(`Allowed origins: ${allowedOrigins.join(', ')}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  optionsSuccessStatus: 204,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  maxAge: 86400,
+};
+
+const corsMiddleware = cors(corsOptions);
+
+const handleCors = (app) => {
+  app.use(corsMiddleware);
+  app.options('*', corsMiddleware);
+
+  // Explicit CORS headers for additional security
+  app.use((req, res, next) => {
+    // Temporary testing configuration
+    if (process.env.CORS_TESTING === 'true') {
+      res.header('Access-Control-Allow-Origin', '*');
+    } else {
+      res.header('Access-Control-Allow-Origin');
+    }
+    res.header(
+      'Access-Control-Allow-Methods',
+      'GET, POST, PUT, DELETE, OPTIONS'
+    );
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    next();
+  });
+};
+
+const validateCorsSetup = () => {
+  if (allowedOrigins.length === 0) {
+    console.error('ERROR: No allowed origins specified for CORS');
+    process.exit(1);
+  }
+
+  if (
+    !process.env.SERVER_CLOUD_FRONTEND_URL ||
+    !process.env.SERVER_LOCAL_FRONTEND_URL
+  ) {
+    console.warn('WARNING: Some CORS environment variables are not set');
+  }
+
+  if (process.env.CORS_TESTING === 'true') {
+    console.warn(
+      'WARNING: CORS testing mode is enabled. Do not use in production!'
+    );
+  }
+};
+
+module.exports = { corsMiddleware, handleCors, validateCorsSetup };
+End of file: ./server/src/utils/corsConfig.js
+
+File: ./server/src/utils/middleware.js
+// utils/middleware.js
+const cors = require('cors');
+
+const corsMiddleware = cors({
+  origin: process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',')
+    : '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
+});
+
+const errorHandler = (err, res) => {
+  console.error(err);
+  res
+    .status(500)
+    .json({ error: 'Internal Server Error', message: err.message });
+};
+
+const applyMiddleware = (handler) => async (req, res) => {
+  try {
+    await new Promise((resolve) => corsMiddleware(req, res, resolve));
+    await handler(req, res);
+  } catch (error) {
+    errorHandler(error, res);
+  }
+};
+
+module.exports = { applyMiddleware };
+End of file: ./server/src/utils/middleware.js
+
+File: ./server/src/models/Item.js
+const mongoose = require('mongoose');
+
+const itemSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: [true, 'Item name is required'],
+      trim: true,
+      maxlength: [100, 'Item name cannot be more than 100 characters'],
+    },
+    description: {
+      type: String,
+      trim: true,
+      maxlength: [500, 'Description cannot be more than 500 characters'],
+    },
+    quantity: {
+      type: Number,
+      required: [true, 'Quantity is required'],
+      min: [0, 'Quantity cannot be negative'],
+      default: 0,
+    },
+    price: {
+      type: Number,
+      required: [true, 'Price is required'],
+      min: [0, 'Price cannot be negative'],
+      default: 0,
+    },
+    category: {
+      type: String,
+      trim: true,
+      maxlength: [50, 'Category cannot be more than 50 characters'],
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+// Add indexes for efficient querying
+itemSchema.index({ name: 'text', description: 'text' });
+itemSchema.index({ category: 1 });
+itemSchema.index({ price: 1 });
+itemSchema.index({ isActive: 1 });
+
+// Virtual for item's URL
+itemSchema.virtual('url').get(function () {
+  return `/items/${this._id}`;
+});
+
+// Method to update quantity
+itemSchema.methods.updateQuantity = function (newQuantity) {
+  this.quantity = Math.max(0, newQuantity);
+  return this.save();
+};
+
+// Method to update price
+itemSchema.methods.updatePrice = function (newPrice) {
+  this.price = Math.max(0, newPrice);
+  return this.save();
+};
+
+// Method to toggle active status
+itemSchema.methods.toggleActive = function () {
+  this.isActive = !this.isActive;
+  return this.save();
+};
+
+// Static method to get total quantity
+itemSchema.statics.getTotalQuantity = async function () {
+  const result = await this.aggregate([
+    { $group: { _id: null, totalQuantity: { $sum: '$quantity' } } },
+  ]);
+  return result.length > 0 ? result[0].totalQuantity : 0;
+};
+
+// Static method to get items by category
+itemSchema.statics.getByCategory = async function (category) {
+  return this.find({ category, isActive: true }).sort('name');
+};
+
+// Static method to get active items
+itemSchema.statics.getActiveItems = async function () {
+  return this.find({ isActive: true }).sort('name');
+};
+
+const Item = mongoose.model('Item', itemSchema);
+
+module.exports = Item;
+
+// server/src/models/Item.js
+End of file: ./server/src/models/Item.js
+
+File: ./server/src/models/Counter.js
+// models/Counter.js
+const mongoose = require('mongoose');
+
+const counterSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: [true, 'Counter name is required'],
+      unique: true,
+      trim: true,
+      maxlength: [100, 'Counter name cannot be more than 100 characters'],
+    },
+    value: {
+      type: Number,
+      default: 0,
+      min: [0, 'Counter value cannot be negative'],
+    },
+    description: {
+      type: String,
+      trim: true,
+      maxlength: [500, 'Description cannot be more than 500 characters'],
+    },
+    lastUpdated: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+// Method to increment the counter
+counterSchema.methods.increment = async function (amount = 1) {
+  this.value += amount;
+  this.lastUpdated = Date.now();
+  return this.save();
+};
+
+// Method to decrement the counter
+counterSchema.methods.decrement = async function (amount = 1) {
+  this.value = Math.max(0, this.value - amount);
+  this.lastUpdated = Date.now();
+  return this.save();
+};
+
+// Method to reset the counter
+counterSchema.methods.reset = async function () {
+  this.value = 0;
+  this.lastUpdated = Date.now();
+  return this.save();
+};
+
+// Method to update the description
+counterSchema.methods.updateDescription = async function (newDescription) {
+  this.description = newDescription;
+  return this.save();
+};
+
+// Static method to get or create a counter
+counterSchema.statics.getOrCreate = async function (name, description = '') {
+  let counter = await this.findOne({ name });
+  if (!counter) {
+    counter = new this({ name, description });
+    await counter.save();
+  }
+  return counter;
+};
+
+// Static method to get all counters
+counterSchema.statics.getAllCounters = async function () {
+  return this.find().sort('name');
+};
+
+// Define indexes
+counterSchema.index({ name: 1 });
+counterSchema.index({ value: 1 });
+
+counterSchema.virtual('url').get(function () {
+  return `/counters/${this._id}`;
+});
+
+const Counter = mongoose.model('Counter', counterSchema);
+
+module.exports = Counter;
+
+// server/src/models/Counter.js
+End of file: ./server/src/models/Counter.js
+
+File: ./server/src/websocket.js
+const WebSocket = require('ws');
+
+function setupWebSocket(server) {
+  const wss = new WebSocket.Server({
+    server,
+    verifyClient: (info, callback) => {
+      const origin = info.origin;
+      const allowedOrigins = [
+        process.env.SERVER_CLOUD_FRONTEND_URL,
+        process.env.SERVER_LOCAL_FRONTEND_URL,
+      ];
+
+      if (allowedOrigins.includes(origin)) {
+        callback(true);
+      } else {
+        console.log(`WebSocket connection rejected from origin: ${origin}`);
+        callback(false, 403, 'Origin not allowed');
+      }
+    },
+  });
+
+  wss.on('connection', (ws, req) => {
+    console.log(
+      'New WebSocket connection established from:',
+      req.headers.origin
+    );
+
+    ws.on('message', (message) => {
+      console.log('Received message:', message);
+      ws.send(`Echo: ${message}`);
+    });
+
+    ws.send('WebSocket connection established');
+  });
+
+  return wss;
+}
+
+module.exports = setupWebSocket;
+End of file: ./server/src/websocket.js
+
+File: ./server/src/db/mongoose.js
+// server/src/db/mongoose.js
+
+const mongoose = require('mongoose');
+require('dotenv').config();
+
+const connectDB = async () => {
+  const options = {
+    serverSelectionTimeoutMS: 5000,
+    autoIndex: false,
+    maxPoolSize: 10,
+    socketTimeoutMS: 45000,
+    family: 4,
+  };
+
+  const mongoUri =
+    process.env.SERVER_USE_CLOUD_DB === 'true'
+      ? process.env.SERVER_CLOUD_DATABASE_URL
+      : process.env.SERVER_LOCAL_DATABASE_URL;
+
+  try {
+    await mongoose.connect(mongoUri, options);
+    console.log('MongoDB connected successfully');
+
+    mongoose.connection.on('connected', () => {
+      console.log('Mongoose connection is open');
+    });
+
+    mongoose.connection.on('error', (err) => {
+      console.error('MongoDB connection error:', err);
+    });
+
+    mongoose.connection.on('disconnected', () => {
+      console.log('MongoDB disconnected. Attempting to reconnect...');
+      setTimeout(connectDB, 5000);
+    });
+
+    process.on('SIGINT', async () => {
+      await mongoose.connection.close();
+      console.log('MongoDB connection closed due to app termination');
+      process.exit(0);
+    });
+  } catch (error) {
+    console.error('MongoDB connection error:', error);
+    process.exit(1);
+  }
+};
+
+module.exports = connectDB;
+End of file: ./server/src/db/mongoose.js
+
+File: ./server/src/routes/itemRoutes.js
+// server/src/routes/itemRoutes.js
+const express = require('express');
+const router = express.Router();
+const Item = require('../models/Item');
+
+// Helper function for error handling
+const asyncHandler = (fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch(next);
+
+// Logging middleware
+const logRequest = (req, res, next) => {
+  console.log(`${req.method} request to ${req.originalUrl}`, {
+    origin: req.headers.origin,
+    'user-agent': req.headers['user-agent'],
+  });
+  next();
+};
+
+router.use(logRequest);
+
+// Get all items with pagination and filtering
+router.get(
+  '/',
+  asyncHandler(async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const startIndex = (page - 1) * limit;
+    const searchQuery = req.query.search || '';
+    const category = req.query.category || '';
+    const sortBy = req.query.sortBy || 'name';
+    const order = req.query.order === 'desc' ? -1 : 1;
+
+    const filter = {};
+    if (searchQuery) {
+      filter.$or = [
+        { name: { $regex: searchQuery, $options: 'i' } },
+        { description: { $regex: searchQuery, $options: 'i' } },
+      ];
+    }
+    if (category) {
+      filter.category = category;
+    }
+
+    const total = await Item.countDocuments(filter);
+    const items = await Item.find(filter)
+      .sort({ [sortBy]: order })
+      .limit(limit)
+      .skip(startIndex);
+
+    res.json({
+      items,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      totalItems: total,
+    });
+  })
+);
+
+// Get a single item by ID
+router.get(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const item = await Item.findById(req.params.id);
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    res.json(item);
+  })
+);
+
+// Create a new item
+router.post(
+  '/',
+  asyncHandler(async (req, res) => {
+    const { name, description, quantity, price, category } = req.body;
+
+    if (!name || typeof quantity !== 'number' || typeof price !== 'number') {
+      return res.status(400).json({
+        message: 'Name, valid quantity, and valid price are required',
+      });
+    }
+
+    const newItem = new Item({ name, description, quantity, price, category });
+    await newItem.save();
+    res.status(201).json(newItem);
+  })
+);
+
+// Update an item
+router.put(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const { name, description, quantity, price, category } = req.body;
+    const item = await Item.findByIdAndUpdate(
+      req.params.id,
+      { name, description, quantity, price, category },
+      { new: true, runValidators: true }
+    );
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    res.json(item);
+  })
+);
+
+// Delete an item
+router.delete(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const item = await Item.findByIdAndDelete(req.params.id);
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    res.json({ message: 'Item deleted successfully' });
+  })
+);
+
+// Get total quantity of all items
+router.get(
+  '/total-quantity',
+  asyncHandler(async (req, res) => {
+    const result = await Item.aggregate([
+      { $group: { _id: null, totalQuantity: { $sum: '$quantity' } } },
+    ]);
+    const totalQuantity = result.length > 0 ? result[0].totalQuantity : 0;
+    res.json({ totalQuantity });
+  })
+);
+
+// Get items by category
+router.get(
+  '/category/:category',
+  asyncHandler(async (req, res) => {
+    const items = await Item.find({ category: req.params.category });
+    res.json(items);
+  })
+);
+
+// Update item quantity
+router.patch(
+  '/:id/quantity',
+  asyncHandler(async (req, res) => {
+    const { quantity } = req.body;
+    if (typeof quantity !== 'number') {
+      return res.status(400).json({ message: 'Valid quantity is required' });
+    }
+    const item = await Item.findByIdAndUpdate(
+      req.params.id,
+      { quantity },
+      { new: true, runValidators: true }
+    );
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    res.json(item);
+  })
+);
+
+module.exports = router;
+
+// server/src/routes/ItemRoutes.js
+End of file: ./server/src/routes/itemRoutes.js
+
+File: ./server/src/routes/infoRoutes.js
+// server/src/routes/infoRoutes.js
+const express = require('express');
+const router = express.Router();
+const mongoose = require('mongoose');
+const os = require('os');
+
+// Helper function to get system info
+const getSystemInfo = () => ({
+  nodeVersion: process.version,
+  platform: process.platform,
+  arch: process.arch,
+  cpus: os.cpus().length,
+  memory: {
+    total: `${Math.round(os.totalmem() / (1024 * 1024 * 1024))} GB`,
+    free: `${Math.round(os.freemem() / (1024 * 1024 * 1024))} GB`,
+    usage: `${Math.round((1 - os.freemem() / os.totalmem()) * 100)}%`,
+  },
+  uptime: {
+    server: `${Math.floor(process.uptime())} seconds`,
+    system: `${Math.floor(os.uptime())} seconds`,
+  },
+  network: Object.values(os.networkInterfaces())
+    .flat()
+    .filter(({ family, internal }) => family === 'IPv4' && !internal)
+    .map(({ address }) => address),
+});
+
+// Helper function to get database info
+const getDatabaseInfo = () => ({
+  connected: mongoose.connection.readyState === 1,
+  uri: process.env.SERVER_LOCAL_DATABASE_URL
+    ? 'Connected (URI masked for security)'
+    : 'Not provided',
+  name: mongoose.connection.name,
+  host: mongoose.connection.host,
+  port: mongoose.connection.port,
+  models: Object.keys(mongoose.models),
+});
+
+// Async handler wrapper with logging
+const asyncHandler = (fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next))
+    .catch(next)
+    .finally(() => {
+      console.log(`${req.method} request to ${req.originalUrl}`, {
+        origin: req.headers.origin,
+        'user-agent': req.headers['user-agent'],
+      });
+    });
+
+// Main info route
+router.get(
+  '/',
+  asyncHandler(async (req, res) => {
+    console.log('Received request for main info route:', {
+      origin: req.headers.origin,
+      method: req.method,
+    });
+    const serverInfo = {
+      message: 'Server is running and connected to the database',
+      serverInfo: {
+        port: process.env.PORT || 3000,
+        environment: process.env.NODE_ENV || 'development',
+        ...getSystemInfo(),
+      },
+      databaseInfo: getDatabaseInfo(),
+    };
+    res.json(serverInfo);
+  })
+);
+
+// Database status route
+router.get(
+  '/database-status',
+  asyncHandler(async (req, res) => {
+    const status = mongoose.connection.readyState;
+    const statusMap = {
+      0: 'disconnected',
+      1: 'connected',
+      2: 'connecting',
+      3: 'disconnecting',
+    };
+
+    res.json({
+      status: statusMap[status],
+      ...getDatabaseInfo(),
+    });
+  })
+);
+
+// System health check route
+router.get(
+  '/health',
+  asyncHandler(async (req, res) => {
+    const healthCheck = {
+      uptime: process.uptime(),
+      responseTime: process.hrtime(),
+      message: 'OK',
+      timestamp: Date.now(),
+    };
+    try {
+      await mongoose.connection.db.admin().ping();
+      healthCheck.database = 'OK';
+    } catch (error) {
+      healthCheck.database = 'ERROR';
+      healthCheck.message = 'ERROR';
+    }
+    res.json(healthCheck);
+  })
+);
+
+// Environment variables route (be cautious with this in production)
+router.get(
+  '/env',
+  asyncHandler(async (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res
+        .status(403)
+        .json({ message: 'Access forbidden in production mode' });
+    }
+    res.json(process.env);
+  })
+);
+
+module.exports = router;
+End of file: ./server/src/routes/infoRoutes.js
+
+File: ./server/src/routes/corsTestRoute.js
+const express = require('express');
+const router = express.Router();
+const errorHandler = require('../middleware/errorHandler');
+
+// Async handler wrapper
+const asyncHandler = (fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch(next);
+
+// CORS test route
+router.get(
+  '/',
+  asyncHandler(async (req, res) => {
+    console.log('Received GET request:', {
+      origin: req.headers.origin,
+      method: req.method,
+    });
+    res.json({
+      message: 'CORS GET request successful',
+      timestamp: new Date().toISOString(),
+      headers: req.headers,
+      method: req.method,
+    });
+  })
+);
+
+// Additional route to test CORS with POST method
+router.post(
+  '/',
+  asyncHandler(async (req, res) => {
+    console.log('Received POST request:', {
+      origin: req.headers.origin,
+      method: req.method,
+    });
+    res.json({
+      message: 'CORS POST request successful',
+      timestamp: new Date().toISOString(),
+      body: req.body,
+      headers: req.headers,
+      method: req.method,
+    });
+  })
+);
+
+// Test route for PUT method
+router.put(
+  '/',
+  asyncHandler(async (req, res) => {
+    console.log('Received PUT request:', {
+      origin: req.headers.origin,
+      method: req.method,
+    });
+    res.json({
+      message: 'CORS PUT request successful',
+      timestamp: new Date().toISOString(),
+      body: req.body,
+      headers: req.headers,
+      method: req.method,
+    });
+  })
+);
+
+// Test route for DELETE method
+router.delete(
+  '/',
+  asyncHandler(async (req, res) => {
+    console.log('Received DELETE request:', {
+      origin: req.headers.origin,
+      method: req.method,
+    });
+    res.json({
+      message: 'CORS DELETE request successful',
+      timestamp: new Date().toISOString(),
+      headers: req.headers,
+      method: req.method,
+    });
+  })
+);
+
+// Test route that intentionally throws an error
+router.get(
+  '/error',
+  asyncHandler(async (req, res) => {
+    console.log('Received error test request:', {
+      origin: req.headers.origin,
+      method: req.method,
+    });
+    throw new Error('This is a test error for CORS');
+  })
+);
+
+// Test route with a delay to simulate slow responses
+router.get(
+  '/delay',
+  asyncHandler(async (req, res) => {
+    console.log('Received delayed request:', {
+      origin: req.headers.origin,
+      method: req.method,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second delay
+    res.json({
+      message: 'Delayed CORS response successful',
+      timestamp: new Date().toISOString(),
+    });
+  })
+);
+
+module.exports = router;
+// server/src/routes/corsTestRoute.js
+End of file: ./server/src/routes/corsTestRoute.js
+
+File: ./server/src/app.js
+const express = require('express');
+const cors = require('cors');
+const { errorHandler } = require('./middleware/errorHandler');
+const { corsConfig } = require('./utils/corsConfig');
+
+const app = express();
+
+app.use(cors(corsConfig));
+// Add other middleware and routes here
+
+app.use(errorHandler);
+
+module.exports = app;
+End of file: ./server/src/app.js
+
+File: ./api/sse.js
+// api/sse.js
+const { handleSSEConnection } = require('../utils/sse-manager');
+
+module.exports = (req, res) => {
+  handleSSEConnection(req, res);
+};
+End of file: ./api/sse.js
+
+File: ./api/wrapper.js
+// api/wrapper.js
+const { applyMiddleware } = require('../utils/middleware');
+
+const createHandler = (handler) => {
+  return applyMiddleware(async (req, res) => {
+    // Your serverless function logic here
+    await handler(req, res);
+  });
+};
+
+module.exports = { createHandler };
+End of file: ./api/wrapper.js
+
+File: ./api/counter-operations.js
+// api/counter-operations.js
+const { connectToDatabase } = require('../utils/db');
+const Counter = require('../models/Counter');
+const { sendSSEUpdate } = require('../utils/sse-manager');
+
+module.exports = async (req, res) => {
+  await connectToDatabase();
+  const { operation, name } = req.body;
+  let counter = await Counter.getOrCreate(name);
+
+  switch (operation) {
+    case 'increment':
+      await counter.increment();
+      break;
+    case 'decrement':
+      await counter.decrement();
+      break;
+    case 'reset':
+      await counter.reset();
+      break;
+  }
+
+  sendSSEUpdate('counter-update', { name, value: counter.value });
+  res.json({ message: 'Operation successful', counter });
+};
+
+End of file: ./api/counter-operations.js
+
+File: ./api/info.js
+// api/info.js
+const express = require('express');
+const mongoose = require('mongoose');
+const os = require('os');
+const connectDB = require('../server/src/db/mongoose');
+const { handleCors } = require('../server/src/utils/corsConfig');
+
+// Helper function to get system info
+const getSystemInfo = () => ({
+  nodeVersion: process.version,
+  platform: process.platform,
+  arch: process.arch,
+  cpus: os.cpus().length,
+  memory: {
+    total: `${Math.round(os.totalmem() / (1024 * 1024 * 1024))} GB`,
+    free: `${Math.round(os.freemem() / (1024 * 1024 * 1024))} GB`,
+    usage: `${Math.round((1 - os.freemem() / os.totalmem()) * 100)}%`,
+  },
+  uptime: {
+    server: `${Math.floor(process.uptime())} seconds`,
+    system: `${Math.floor(os.uptime())} seconds`,
+  },
+});
+
+// Helper function to get database info
+const getDatabaseInfo = () => ({
+  connected: mongoose.connection.readyState === 1,
+  name: mongoose.connection.name,
+  host: mongoose.connection.host,
+  port: mongoose.connection.port,
+  models: Object.keys(mongoose.models),
+});
+
+// Main handler function
+const infoHandler = async (req, res) => {
+  await connectDB();
+
+  const path = req.path || req.url; // Use req.url for serverless, req.path for Express
+
+  console.log('Received request for info route:', {
+    path,
+    origin: req.headers.origin,
+    method: req.method,
+  });
+
+  switch (path) {
+    case '/api/info':
+      const serverInfo = {
+        message: 'Server is running and connected to the database',
+        serverInfo: {
+          environment: process.env.NODE_ENV || 'development',
+          ...getSystemInfo(),
+        },
+        databaseInfo: getDatabaseInfo(),
+      };
+      res.json(serverInfo);
+      break;
+
+    case '/api/info/database-status':
+      const status = mongoose.connection.readyState;
+      const statusMap = {
+        0: 'disconnected',
+        1: 'connected',
+        2: 'connecting',
+        3: 'disconnecting',
+      };
+      res.json({
+        status: statusMap[status],
+        ...getDatabaseInfo(),
+      });
+      break;
+
+    case '/api/info/health':
+      const healthCheck = {
+        uptime: process.uptime(),
+        responseTime: process.hrtime(),
+        message: 'OK',
+        timestamp: Date.now(),
+      };
+      try {
+        await mongoose.connection.db.admin().ping();
+        healthCheck.database = 'OK';
+      } catch (error) {
+        healthCheck.database = 'ERROR';
+        healthCheck.message = 'ERROR';
+      }
+      res.json(healthCheck);
+      break;
+
+    default:
+      res.status(404).json({ error: 'Not found' });
+  }
+};
+
+// Express app setup
+const app = express();
+handleCors(app);
+app.use(express.json());
+
+// Express routes
+app.get('/api/info', infoHandler);
+app.get('/api/info/database-status', infoHandler);
+app.get('/api/info/health', infoHandler);
+
+// Serverless handler
+const serverlessHandler = async (req, res) => {
+  await infoHandler(req, res);
+};
+
+// Export both the Express app and the serverless handler
+module.exports = process.env.VERCEL ? serverlessHandler : app;
+End of file: ./api/info.js
+
+File: ./client/src/App.vue
+<template>
+  <div id="app">
+    <header>
+      <!-- Uncomment if needed -->
+      <!-- <h1>FullStack Connection Kit Tester</h1> -->
+    </header>
+    <main>
+      <ApiTester />
+    </main>
+    <footer>
+      <p>&copy; {{ currentYear }} Full Stack Connection Kit created by Abe Reyes</p>
+    </footer>
+  </div>
+</template>
+
+<script>
+import ApiTester from './components/ApiTester.vue'
+
+export default {
+  name: 'App',
+  components: {
+    ApiTester
+  },
+  computed: {
+    currentYear() {
+      return new Date().getFullYear()
+    }
+  }
+}
+</script>
+
+<style scoped>
+#app {
+  font-family: 'Roboto', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-align: center;
+  color: #2c3e50;
+  max-width: 60%;
+  margin: 60px auto;
+  padding: 1rem ;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  box-shadow: 1px 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+header, main, footer {
+  margin-bottom: 1rem;
+}
+
+h1 {
+  color: #2c3e50;
+  font-size: 2em;
+  margin-bottom: 0.5em;
+}
+
+footer {
+  font-size: 0.9em;
+  color: #888;
+  /* border-top: 1px solid #e0e0e0; */
+  padding-top: 1em;
+  margin-top: 1rem;
+}
+
+footer p {
+  margin: 1rem;
+}
+
+
+
+main > *:first-child {
+  margin-top: 1em;
+}
+
+main > *:last-child {
+  margin-bottom: 1em;
+}
+</style>
+End of file: ./client/src/App.vue
+
+File: ./client/src/utils/clientErrorHandler.js
+// clientErrorHandler.js
+
+import { v4 as uuidv4 } from 'uuid';
+
+const clientErrorHandler = (error, context) => {
+  const errorId = uuidv4();
+
+  // Log the error with the unique identifier and context details
+  console.error(`Error ID ${errorId}:`, {
+    error,
+    context,
+  });
+
+  // Set default values
+  let status = error.response?.status || 500;
+  let message =
+    process.env.NODE_ENV === 'production'
+      ? 'An unexpected error occurred'
+      : error.message || 'An unexpected error occurred';
+  let errorCode = error.code || 'INTERNAL_ERROR';
+
+  // Handle specific error types
+  if (error.response) {
+    status = error.response.status;
+    message = error.response.data?.message || message;
+    errorCode = error.response.data?.errorCode || errorCode;
+  } else if (error.request) {
+    status = 0;
+    message = 'No response received from the server';
+    errorCode = 'NO_RESPONSE';
+  }
+
+  // Prepare the error response
+  const errorResponse = {
+    status: 'error',
+    errorCode,
+    message,
+    errorId,
+    timestamp: new Date().toISOString(),
+  };
+
+  // Include additional information in development environment
+  if (process.env.NODE_ENV === 'development') {
+    errorResponse.stack = error.stack;
+  }
+
+  return errorResponse;
+};
+
+export default clientErrorHandler;
+End of file: ./client/src/utils/clientErrorHandler.js
+
+File: ./client/src/main.js
+import Vue from 'vue';
+import App from './App.vue';
+
+// Disable production tip
+Vue.config.productionTip = false;
+
+// Enable performance tracking in development
+Vue.config.performance = process.env.NODE_ENV !== 'production';
+
+// Global error handler
+Vue.config.errorHandler = function (err, vm, info) {
+  console.error('Vue Error:', err, info);
+  // You could also send errors to a logging service here
+};
+
+// Enable Vue Devtools in development
+if (process.env.NODE_ENV === 'development') {
+  Vue.config.devtools = true;
+}
+
+// Initialize the Vue instance
+new Vue({
+  render: (h) => h(App),
+}).$mount('#app');
+End of file: ./client/src/main.js
+
+File: ./client/src/components/ApiTestsPanel.vue
+<template>
+  <section class="panel api-tests">
+    <h2>API Tests</h2>
+    <div class="test-group">
+      <h3>Database Test</h3>
+      <button @click="testDatabase" class="button button-green">Test Database Connection</button>
+      <p class="status">{{ databaseStatus }}</p>
+    </div>
+    <div class="test-group">
+      <h3>WebSocket Test</h3>
+      <button @click="testWebSocket" class="button button-green">Test WebSocket</button>
+      <p class="status">{{ websocketStatus }}</p>
+    </div>
+    <div class="test-group">
+      <h3>CORS Test</h3>
+      <button @click="testCORS" class="button button-green">Test CORS</button>
+      <p class="status">{{ corsStatus }}</p>
+    </div>
+    <div class="test-group">
+      <h3>Counter Operations (ODF)</h3>
+      <input v-model="counterName" placeholder="Counter name" class="input-field">
+      <button @click="performCounterOperation('increment')" class="button button-blue">Increment</button>
+      <button @click="performCounterOperation('decrement')" class="button button-blue">Decrement</button>
+      <button @click="performCounterOperation('reset')" class="button button-blue">Reset</button>
+      <p class="status">{{ counterStatus }}</p>
+    </div>
+    <div class="test-group">
+      <h3>SSE Updates</h3>
+      <button @click="toggleSSE" class="button" :class="{ 'button-green': !sseActive, 'button-red': sseActive }">
+        {{ sseActive ? 'Stop' : 'Start' }} SSE
+      </button>
+      <p class="status">{{ sseStatus }}</p>
+    </div>
+  </section>
+</template>
+
+<script>
+export default {
+  name: 'ApiTestsPanel',
+  props: {
+    apiCall: {
+      type: Function,
+      required: true
+    },
+    apiUrl: {
+      type: String,
+      required: true
+    }
+  },
+  data() {
+    return {
+      databaseStatus: '',
+      websocketStatus: '',
+      corsStatus: '',
+      counterName: '',
+      counterStatus: '',
+      sseActive: false,
+      sseStatus: '',
+      eventSource: null
+    };
+  },
+  methods: {
+    async testDatabase() {
+      try {
+        const { status } = await this.apiCall('get', `${this.apiUrl}/api/info/database-status`);
+        this.databaseStatus = `Database is ${status}`;
+        this.$emit('database-status', this.databaseStatus);
+      } catch (error) {
+        this.handleError('Database test', error);
+      }
+    },
+    testWebSocket() {
+      const isProduction = process.env.NODE_ENV === 'production';
+      const protocol = isProduction ? 'wss://' : 'ws://';
+      const host = isProduction ? window.location.host : `${window.location.hostname}:${process.env.VUE_APP_BACKEND_PORT}`;
+      
+      const ws = new WebSocket(`${protocol}${host}`);
+
+      ws.onopen = () => {
+        this.websocketStatus = 'WebSocket connected';
+        ws.send('Hello, WebSocket!');
+        this.$emit('websocket-status', this.websocketStatus);
+      };
+
+      ws.onmessage = (event) => {
+        this.websocketStatus += `\nReceived: ${event.data}`;
+        this.$emit('websocket-status', this.websocketStatus);
+      };
+
+      ws.onerror = (error) => {
+        this.handleError('WebSocket test', error);
+      };
+    },
+    async testCORS() {
+      try {
+        const getResponse = await this.apiCall('get', `${this.apiUrl}/api/cors-test`);
+        const postResponse = await this.apiCall('post', `${this.apiUrl}/api/cors-test`, { test: 'data' });
+        this.corsStatus = `GET: ${getResponse.message}\nPOST: ${postResponse.message}`;
+        this.$emit('cors-status', this.corsStatus);
+      } catch (error) {
+        this.handleError('CORS test', error);
+      }
+    },
+    async performCounterOperation(operation) {
+      try {
+        const response = await this.apiCall('post', `${this.apiUrl}/api/counter-operations`, {
+          operation,
+          name: this.counterName
+        });
+        this.counterStatus = `Operation '${operation}' successful. New value: ${response.counter.value}`;
+      } catch (error) {
+        this.handleError('Counter operation', error);
+      }
+    },
+    toggleSSE() {
+      if (this.sseActive) {
+        this.eventSource.close();
+        this.sseActive = false;
+        this.sseStatus = 'SSE stopped';
+      } else {
+        this.eventSource = new EventSource(`${this.apiUrl}/api/sse`);
+        this.eventSource.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          this.sseStatus = `Received update: ${JSON.stringify(data)}`;
+        };
+        this.eventSource.onerror = (error) => {
+          this.handleError('SSE connection', error);
+          this.sseActive = false;
+        };
+        this.sseActive = true;
+        this.sseStatus = 'SSE started';
+      }
+    },
+    handleError(testName, error) {
+      const errorMessage = `${testName} failed: ${error.response?.status} ${error.response?.statusText || error.message}`;
+      console.error(errorMessage);
+      switch (testName) {
+        case 'Database test':
+          this.databaseStatus = errorMessage;
+          this.$emit('database-status', this.databaseStatus);
+          break;
+        case 'WebSocket test':
+          this.websocketStatus = errorMessage;
+          this.$emit('websocket-status', this.websocketStatus);
+          break;
+        case 'CORS test':
+          this.corsStatus = errorMessage;
+          this.$emit('cors-status', this.corsStatus);
+          break;
+        case 'Counter operation':
+          this.counterStatus = errorMessage;
+          break;
+        case 'SSE connection':
+          this.sseStatus = errorMessage;
+          break;
+      }
+    }
+  }
+};
+</script>
+
+<style scoped>
+@import '../styles/sharedStyles.css';
+
+.input-field {
+  width: auto;
+  margin-right: 10px;
+}
+
+.button-blue {
+  background-color: var(--button-purple);
+  color: var(--button-text);
+  border: 2px solid var(--muted-grey);
+}
+
+.button-blue:hover {
+  background-color: var(--button-purple-hover);
+}
+
+.test-group {
+  margin-bottom: 20px;
+}
+
+.test-group h3 {
+  margin-bottom: 10px;
+}
+
+.status {
+  margin-top: 10px;
+  font-style: italic;
+}
+</style>End of file: ./client/src/components/ApiTestsPanel.vue
+
+File: ./client/src/components/ApiTester.vue
+<template>
+  <div class="container">
+    <h1>FullStackConnectionKit API Tester</h1>
+    <div v-if="loading" class="loading">Loading...</div>
+    <div v-else class="grid">
+      <section class="panel system-info">
+        <h2>System Information</h2>
+        <div>
+          <p v-for="(info, key) in sections[0].info" :key="key">
+            <strong>{{ key }}:</strong> {{ info }}
+          </p>
+        </div>
+      </section>
+
+      <ApiTestsPanel 
+        :apiCall="apiCall"
+        :apiUrl="apiUrl"
+        @database-status="updateDatabaseStatus"
+        @websocket-status="updateWebsocketStatus"
+        @cors-status="updateCorsStatus"
+      />
+
+      <section class="panel create-item">
+        <h2>Create Item</h2>
+        <form @submit.prevent="createItem">
+          <div>
+            <label for="item-name">Item name:</label>
+            <input id="item-name" v-model="newItem.name" type="text" class="input-field" required />
+          </div>
+          <div>
+            <label for="item-description">Description:</label>
+            <input id="item-description" v-model="newItem.description" type="text" class="input-field" />
+          </div>
+          <div>
+            <label for="item-quantity">Quantity:</label>
+            <input id="item-quantity" v-model.number="newItem.quantity" type="number" class="input-field" required min="0" />
+          </div>
+          <div>
+            <label for="item-price">Price:</label>
+            <input id="item-price" v-model.number="newItem.price" type="number" class="input-field" required min="0" step="0.01" />
+          </div>
+          <button type="submit" :disabled="!isFormValid" class="button button-red">Create Item</button>
+        </form>
+      </section>
+
+      <section class="panel items">
+        <h2>Items</h2>
+        <ul v-if="items.length" class="item-list">
+          <li v-for="item in items" :key="item._id">
+            {{ item.name }}: {{ item.description }} (Quantity: {{ item.quantity }}, Price: ${{ item.price }})
+            <button @click="deleteItem(item._id)" class="button delete-button">Delete</button>
+          </li>
+        </ul>
+        <p v-else>No items found.</p>
+        <p class="total-quantity"><strong>Total Quantity:</strong> {{ totalQuantity }}</p>
+        <button @click="fetchItems" class="button refresh-button">Refresh Items</button>
+      </section>
+    </div>
+  </div>
+</template>
+
+<script>
+import axios from 'axios';
+import ApiTestsPanel from './ApiTestsPanel.vue';
+
+const axiosInstance = axios.create({
+  withCredentials: true,
+});
+
+export default {
+  name: 'ApiTester',
+  components: {
+    ApiTestsPanel
+  },
+  data() {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const apiUrl = isProduction
+      ? process.env.VUE_APP_API_URL_CLOUD
+      : process.env.VUE_APP_API_URL_LOCAL;
+
+    return {
+      loading: true,
+      apiUrl,
+      clientInfo: `Running on ${window.location.origin}`,
+      serverInfo: {},
+      databaseInfo: {},
+      connectionStatus: 'Not connected',
+      databaseStatus: '',
+      websocketStatus: '',
+      corsStatus: '',
+      items: [],
+      newItem: {
+        name: '',
+        description: '',
+        quantity: 0,
+        price: 0
+      }
+    };
+  },
+  computed: {
+    totalQuantity() {
+      return this.items.reduce((total, item) => total + item.quantity, 0);
+    },
+    isFormValid() {
+      return (
+        this.newItem.name.trim() !== '' &&
+        this.newItem.quantity >= 0 &&
+        this.newItem.price >= 0
+      );
+    },
+    sections() {
+      return [
+        {
+          title: 'System Information',
+          info: {
+            Client: this.clientInfo,
+            Server: this.serverInfo.port,
+            Database: this.databaseInfo.uri,
+            'API Connection Status': this.connectionStatus,
+          },
+        },
+      ];
+    },
+  },
+  async mounted() {
+    await this.fetchInfo();
+    await this.fetchItems();
+    this.loading = false;
+  },
+  methods: {
+    async apiCall(method, url, data = null) {
+      try {
+        console.log(`Making ${method.toUpperCase()} request to ${url}`);
+        if (data) {
+          console.log('Request data:', JSON.stringify(data, null, 2));
+        }
+        const response = await axiosInstance[method](url, data);
+        console.log('Response:', response.data);
+        return response.data;
+      } catch (error) {
+        console.error(`Error in API call (${method} ${url}):`, error);
+        if (error.response) {
+          console.error('Response data:', error.response.data);
+        }
+        throw error;
+      }
+    },
+    async fetchInfo() {
+      try {
+        const { serverInfo, databaseInfo } = await this.apiCall('get', `${this.apiUrl}/api/info`);
+        this.serverInfo = serverInfo;
+        this.databaseInfo = databaseInfo;
+        this.connectionStatus = 'Connected successfully';
+      } catch (error) {
+        this.connectionStatus = `Error connecting to server: ${error.response?.status} ${error.response?.statusText || error.message}`;
+      }
+    },
+    async createItem() {
+      try {
+        await this.apiCall('post', `${this.apiUrl}/api/items`, this.newItem);
+        this.connectionStatus = 'Item created successfully';
+        this.newItem = { name: '', description: '', quantity: 0, price: 0 };
+        await this.fetchItems();
+      } catch (error) {
+        this.connectionStatus = `Error creating item: ${error.response?.status} ${error.response?.statusText || error.message}`;
+      }
+    },
+    async fetchItems() {
+      try {
+        const { items } = await this.apiCall('get', `${this.apiUrl}/api/items`);
+        this.items = items;
+        this.connectionStatus = 'Items fetched successfully';
+      } catch (error) {
+        this.connectionStatus = `Error fetching items: ${error.response?.status} ${error.response?.statusText || error.message}`;
+      }
+    },
+    async deleteItem(id) {
+      try {
+        await this.apiCall('delete', `${this.apiUrl}/api/items/${id}`);
+        this.connectionStatus = 'Item deleted successfully';
+        await this.fetchItems();
+      } catch (error) {
+        this.connectionStatus = `Error deleting item: ${error.response?.status} ${error.response?.statusText || error.message}`;
+      }
+    },
+    updateDatabaseStatus(status) {
+      this.databaseStatus = status;
+    },
+    updateWebsocketStatus(status) {
+      this.websocketStatus = status;
+    },
+    updateCorsStatus(status) {
+      this.corsStatus = status;
+    },
+  },
+};
+</script>
+
+<style scoped>
+@import '../styles/sharedStyles.css';
+</style>End of file: ./client/src/components/ApiTester.vue
+

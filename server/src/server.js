@@ -1,23 +1,26 @@
 const express = require('express');
 const http = require('http');
+const cors = require('cors');
 require('dotenv').config();
 const connectDB = require('./db/mongoose');
-const setupWebSocket = require('./websocket');
 const infoRoutes = require('./routes/infoRoutes');
 const itemRoutes = require('./routes/itemRoutes');
+const sseRoute = require('./routes/sseRoute');
 const errorHandler = require('./middleware/errorHandler');
-const { handleCors, validateCorsSetup } = require('./utils/corsConfig');
+const { corsConfig, validateCorsSetup } = require('./utils/corsConfig');
 
 const app = express();
-const server = http.createServer(app);
-
-const PORT = process.env.PORT || 3000;
 
 // Validate CORS setup
 validateCorsSetup();
 
 // Apply CORS middleware
-handleCors(app);
+if (process.env.NODE_ENV === 'development') {
+  app.use(cors({ origin: 'http://localhost:8080', credentials: true }));
+} else {
+  app.use(cors(corsConfig));
+}
+app.options('*', cors(corsConfig));
 
 // Debug logging
 app.use((req, res, next) => {
@@ -30,15 +33,21 @@ app.use((req, res, next) => {
   next();
 });
 
-// Connect to the database
-connectDB();
-
-// Other middleware
+// Middleware
 app.use(express.json());
+
+// Connect to the database
+app.use(async (req, res, next) => {
+  if (!global.mongoose) {
+    global.mongoose = await connectDB();
+  }
+  next();
+});
 
 // Routes
 app.use('/api/info', infoRoutes);
 app.use('/api/items', itemRoutes);
+app.use('/api/sse', sseRoute);
 
 // Additional routes
 app.get('/api/info/database-status', (req, res) => {
@@ -53,20 +62,24 @@ app.post('/api/cors-test', (req, res) => {
   res.json({ message: 'CORS POST request successful' });
 });
 
-// Setup WebSocket
-const wss = setupWebSocket(server);
-
 // Error handling middleware
 app.use(errorHandler);
 
-// Start server
-const startServer = () => {
-  server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`WebSocket server is running on ws://localhost:${PORT}`);
-  });
+// Serverless-compatible handler
+const serverlessHandler = async (req, res) => {
+  await new Promise((resolve) => cors(corsConfig)(req, res, resolve));
+  await app(req, res);
 };
 
-startServer();
+// Start server if not in a serverless environment
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 3000;
+  const server = http.createServer(app);
 
-module.exports = { app, server }; // For testing purposes
+  server.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+    console.log(`SSE endpoint available at http://localhost:${PORT}/api/sse`);
+  });
+}
+
+module.exports = process.env.VERCEL ? serverlessHandler : app;
