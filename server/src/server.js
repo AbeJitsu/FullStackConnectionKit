@@ -6,6 +6,8 @@ const connectDB = require('./db/mongoose');
 const infoRoutes = require('./routes/infoRoutes');
 const itemRoutes = require('./routes/itemRoutes');
 const sseRoute = require('./routes/sseRoute');
+const counterRoutes = require('./routes/counterRoutes');
+const counterOperations = require('../../api/counter-operations');
 const errorHandler = require('./middleware/errorHandler');
 const { corsConfig, validateCorsSetup } = require('./utils/corsConfig');
 
@@ -48,6 +50,13 @@ app.use(async (req, res, next) => {
 app.use('/api/info', infoRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/sse', sseRoute);
+
+// Counter operations route
+if (process.env.NODE_ENV === 'production') {
+  app.post('/api/counter-operations', counterOperations);
+} else {
+  app.use('/api/counter-operations', counterRoutes);
+}
 
 // Additional routes
 app.get('/api/info/database-status', (req, res) => {

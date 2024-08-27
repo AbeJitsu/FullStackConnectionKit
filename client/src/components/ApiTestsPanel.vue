@@ -13,10 +13,10 @@
     </div>
     <div class="test-group">
       <h3>Counter Operations (ODF)</h3>
-      <input v-model="counterName" placeholder="Counter name" class="input-field">
-      <button @click="performCounterOperation('increment')" class="button button-blue">Increment</button>
-      <button @click="performCounterOperation('decrement')" class="button button-blue">Decrement</button>
-      <button @click="performCounterOperation('reset')" class="button button-blue">Reset</button>
+      <input v-model="counterName" placeholder="Counter name" class="input-field" required>
+      <button @click="performCounterOperation('increment')" class="button button-blue" :disabled="!counterName">Increment</button>
+      <button @click="performCounterOperation('decrement')" class="button button-blue" :disabled="!counterName">Decrement</button>
+      <button @click="performCounterOperation('reset')" class="button button-blue" :disabled="!counterName">Reset</button>
       <p class="status">{{ counterStatus }}</p>
     </div>
     <div class="test-group">
@@ -36,10 +36,6 @@ export default {
     apiCall: {
       type: Function,
       required: true
-    },
-    apiUrl: {
-      type: String,
-      required: true
     }
   },
   data() {
@@ -50,11 +46,24 @@ export default {
       counterStatus: '',
       sseActive: false,
       sseStatus: '',
-      eventSource: null
+      eventSource: null,
+      apiUrl: process.env.NODE_ENV === 'production'
+        ? process.env.VUE_APP_API_URL_CLOUD
+        : process.env.VUE_APP_API_URL_LOCAL
     };
   },
+  mounted() {
+    this.startSSE();
+  },
   methods: {
+    clearStatus() {
+      this.databaseStatus = '';
+      this.corsStatus = '';
+      this.counterStatus = '';
+      this.sseStatus = '';
+    },
     async testDatabase() {
+      this.clearStatus();
       try {
         const { status } = await this.apiCall('get', `${this.apiUrl}/api/info/database-status`);
         this.databaseStatus = `Database is ${status}`;
@@ -64,6 +73,7 @@ export default {
       }
     },
     async testCORS() {
+      this.clearStatus();
       try {
         const getResponse = await this.apiCall('get', `${this.apiUrl}/api/cors-test`);
         const postResponse = await this.apiCall('post', `${this.apiUrl}/api/cors-test`, { test: 'data' });
@@ -74,40 +84,81 @@ export default {
       }
     },
     async performCounterOperation(operation) {
+      this.clearStatus();
+      if (!this.counterName) {
+        this.counterStatus = 'Please enter a counter name';
+        return;
+      }
       try {
         const response = await this.apiCall('post', `${this.apiUrl}/api/counter-operations`, {
           operation,
           name: this.counterName
         });
         this.counterStatus = `Operation '${operation}' successful. New value: ${response.counter.value}`;
+        console.log('Counter operation response:', response);
       } catch (error) {
+        console.error('Counter operation error:', error);
         this.handleError('Counter operation', error);
       }
     },
     toggleSSE() {
+      this.clearStatus();
       if (this.sseActive) {
-        this.eventSource.close();
-        this.sseActive = false;
-        this.sseStatus = 'SSE stopped';
+        this.stopSSE();
       } else {
-        this.eventSource = new EventSource(`${this.apiUrl}/api/sse`);
-        this.eventSource.onmessage = (event) => {
-          console.log('SSE message received:', event.data);
-          const data = JSON.parse(event.data);
-          this.sseStatus = `Received update: ${JSON.stringify(data)}`;
-        };
-        this.eventSource.onerror = (error) => {
-          console.error('SSE Error:', error);
-          this.sseStatus = `SSE connection failed: ${error.message || 'Unknown error'}`;
-          this.sseActive = false;
-          this.eventSource.close();
-        };
-        this.eventSource.onopen = () => {
-          console.log('SSE connection opened');
-          this.sseActive = true;
-          this.sseStatus = 'SSE started';
-        };
+        this.startSSE();
       }
+    },
+    startSSE() {
+      this.eventSource = new EventSource(`${this.apiUrl}/api/sse`);
+      this.eventSource.onmessage = this.handleSSEMessage;
+      this.eventSource.onerror = this.handleSSEError;
+      this.eventSource.onopen = this.handleSSEOpen;
+      
+      this.eventSource.addEventListener('counter-update', (event) => {
+        const data = JSON.parse(event.data);
+        this.counterStatus = `Counter '${data.name}' updated. New value: ${data.value}`;
+      });
+    },
+    stopSSE() {
+      if (this.eventSource) {
+        this.eventSource.close();
+        this.eventSource = null;
+      }
+      this.sseActive = false;
+      this.sseStatus = 'SSE stopped';
+    },
+    handleSSEMessage(event) {
+      console.log('SSE message received:', event.data);
+      try {
+        const data = JSON.parse(event.data);
+        this.sseStatus = `Received update: ${JSON.stringify(data)}`;
+      } catch (error) {
+        console.error('Error parsing SSE message:', error);
+        this.sseStatus = `Error parsing SSE message: ${error.message}`;
+      }
+    },
+    handleSSEError(error) {
+      console.error('SSE Error:', error);
+      console.error('SSE readyState:', this.eventSource?.readyState);
+      this.sseStatus = `SSE connection failed: ${error.message || 'Unknown error'}`;
+      this.sseActive = false;
+      if (this.eventSource) {
+        this.eventSource.close();
+        this.eventSource = null;
+      }
+      
+      // Attempt to reconnect after 5 seconds
+      setTimeout(() => {
+        if (!this.sseActive) {
+          this.startSSE();
+        }
+      }, 5000);
+    },
+    handleSSEOpen() {
+      console.log('SSE connection opened');
+      this.sseActive = true;
+      this.sseStatus = 'SSE started';
     },
     handleError(testName, error) {
       const errorMessage = `${testName} failed: ${error.response?.status} ${error.response?.statusText || error.message}`;
