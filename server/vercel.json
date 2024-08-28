@@ -1,14 +1,7 @@
 {
   "version": 2,
   "builds": [{ "src": "api/**/*.js", "use": "@vercel/node" }],
-  "routes": [
-    { "src": "/api/info(.*)", "dest": "/api/infoServerless.js" },
-    { "src": "/api/items(.*)", "dest": "/api/items.js" },
-    { "src": "/api/cors-test(.*)", "dest": "/api/cors-test.js" },
-    { "src": "/api/counter-operations", "dest": "/api/counter-operations.js" },
-    { "src": "/api/sse", "dest": "/api/sse.js" },
-    { "src": "/api/(.*)", "dest": "/api/$1" }
-  ],
+  "routes": [{ "src": "/api/(.*)", "dest": "/api/$1" }],
   "headers": [
     {
       "source": "/api/(.*)",
