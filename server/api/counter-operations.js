@@ -1,7 +1,7 @@
 // api/counter-operations.js
 const mongoose = require('mongoose');
-const Counter = require('../server/src/models/Counter');
-const connectDB = require('../server/src/db/mongoose');
+const Counter = require('../src/models/Counter');
+const connectDB = require('../src/db/mongoose');
 
 let isConnected = false;
 

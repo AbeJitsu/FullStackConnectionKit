@@ -1,41 +1,7 @@
 // server/src/routes/infoRoutes.js
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
-const os = require('os');
-
-// Helper function to get system info
-const getSystemInfo = () => ({
-  nodeVersion: process.version,
-  platform: process.platform,
-  arch: process.arch,
-  cpus: os.cpus().length,
-  memory: {
-    total: `${Math.round(os.totalmem() / (1024 * 1024 * 1024))} GB`,
-    free: `${Math.round(os.freemem() / (1024 * 1024 * 1024))} GB`,
-    usage: `${Math.round((1 - os.freemem() / os.totalmem()) * 100)}%`,
-  },
-  uptime: {
-    server: `${Math.floor(process.uptime())} seconds`,
-    system: `${Math.floor(os.uptime())} seconds`,
-  },
-  network: Object.values(os.networkInterfaces())
-    .flat()
-    .filter(({ family, internal }) => family === 'IPv4' && !internal)
-    .map(({ address }) => address),
-});
-
-// Helper function to get database info
-const getDatabaseInfo = () => ({
-  connected: mongoose.connection.readyState === 1,
-  uri: process.env.SERVER_LOCAL_DATABASE_URL
-    ? 'Connected (URI masked for security)'
-    : 'Not provided',
-  name: mongoose.connection.name,
-  host: mongoose.connection.host,
-  port: mongoose.connection.port,
-  models: Object.keys(mongoose.models),
-});
+const infoService = require('../services/infoService');
 
 // Async handler wrapper with logging
 const asyncHandler = (fn) => (req, res, next) =>
@@ -52,20 +18,7 @@ const asyncHandler = (fn) => (req, res, next) =>
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    console.log('Received request for main info route:', {
-      origin: req.headers.origin,
-      method: req.method,
-    });
-    const serverInfo = {
-      message: 'Server is running and connected to the database',
-      serverInfo: {
-        port: process.env.PORT || 3000,
-        environment: process.env.NODE_ENV || 'development',
-        ...getSystemInfo(),
-      },
-      databaseInfo: getDatabaseInfo(),
-    };
-    res.json(serverInfo);
+    res.json(infoService.getServerInfo());
   })
 );
 
@@ -73,18 +26,7 @@ router.get(
 router.get(
   '/database-status',
   asyncHandler(async (req, res) => {
-    const status = mongoose.connection.readyState;
-    const statusMap = {
-      0: 'disconnected',
-      1: 'connected',
-      2: 'connecting',
-      3: 'disconnecting',
-    };
-
-    res.json({
-      status: statusMap[status],
-      ...getDatabaseInfo(),
-    });
+    res.json(infoService.getDatabaseStatus());
   })
 );
 
@@ -92,19 +34,7 @@ router.get(
 router.get(
   '/health',
   asyncHandler(async (req, res) => {
-    const healthCheck = {
-      uptime: process.uptime(),
-      responseTime: process.hrtime(),
-      message: 'OK',
-      timestamp: Date.now(),
-    };
-    try {
-      await mongoose.connection.db.admin().ping();
-      healthCheck.database = 'OK';
-    } catch (error) {
-      healthCheck.database = 'ERROR';
-      healthCheck.message = 'ERROR';
-    }
+    const healthCheck = await infoService.getHealthCheck();
     res.json(healthCheck);
   })
 );
