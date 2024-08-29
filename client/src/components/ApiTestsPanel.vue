@@ -215,3 +215,5 @@ export default {
   font-style: italic;
 }
 </style>
+
+<!-- // End of file: ./client/src/components/ApiTestsPanel.vue -->

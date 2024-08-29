@@ -20,8 +20,19 @@ const corsOptions = {
   },
   credentials: true,
   optionsSuccessStatus: 204,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  methods: ['GET', 'OPTIONS', 'PATCH', 'DELETE', 'POST', 'PUT'],
+  allowedHeaders: [
+    'X-CSRF-Token',
+    'X-Requested-With',
+    'Accept',
+    'Accept-Version',
+    'Content-Length',
+    'Content-MD5',
+    'Content-Type',
+    'Date',
+    'X-Api-Version',
+    'Authorization',
+  ],
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
   maxAge: 86400,
 };
@@ -34,17 +45,20 @@ const handleCors = (app) => {
 
   // Explicit CORS headers for additional security
   app.use((req, res, next) => {
-    // Temporary testing configuration
     if (process.env.CORS_TESTING === 'true') {
       res.header('Access-Control-Allow-Origin', '*');
     } else {
-      res.header('Access-Control-Allow-Origin');
+      res.header('Access-Control-Allow-Origin', allowedOrigins.join(', '));
     }
+    res.header('Access-Control-Allow-Credentials', 'true');
     res.header(
       'Access-Control-Allow-Methods',
-      'GET, POST, PUT, DELETE, OPTIONS'
+      'GET,OPTIONS,PATCH,DELETE,POST,PUT'
     );
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header(
+      'Access-Control-Allow-Headers',
+      'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
+    );
     next();
   });
 };

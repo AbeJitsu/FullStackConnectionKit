@@ -194,3 +194,5 @@ export default {
 <style scoped>
 @import '../styles/sharedStyles.css';
 </style>
+
+<!-- End of file: ./client/src/components/ApiTester.vue -->

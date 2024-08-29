@@ -15,18 +15,25 @@ module.exports = async (req, res) => {
   try {
     await connectToDatabase();
 
-    // Use req.url directly, as Vercel strips the /api prefix
-    const path = req.url;
+    // Log the request details for debugging
+    console.log('Request URL:', req.url);
+    console.log('Request method:', req.method);
 
-    if (path === '/info/database-status') {
+    // Extract the path from the URL
+    const path = new URL(req.url, `http://${req.headers.host}`).pathname;
+
+    // Log the extracted path
+    console.log('Extracted path:', path);
+
+    if (path === '/api/info/database-status') {
       res.json(infoService.getDatabaseStatus());
-    } else if (path === '/info/health') {
+    } else if (path === '/api/info/health') {
       const healthCheck = await infoService.getHealthCheck();
       res.json(healthCheck);
-    } else if (path === '/info') {
+    } else if (path === '/api/info') {
       res.json(infoService.getServerInfo());
     } else {
-      res.status(404).json({ error: 'Not found' });
+      res.status(404).json({ error: 'Not found', path: path });
     }
   } catch (error) {
     console.error('Info route error:', error);
