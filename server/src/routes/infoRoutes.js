@@ -18,6 +18,10 @@ const asyncHandler = (fn) => (req, res, next) =>
 router.get(
   '/',
   asyncHandler(async (req, res) => {
+    console.log(
+      'Current environment:',
+      process.env.VERCEL ? 'Vercel' : 'Express'
+    );
     res.json(infoService.getServerInfo());
   })
 );

@@ -7,9 +7,11 @@ const infoRoutes = require('./routes/infoRoutes');
 const itemRoutes = require('./routes/itemRoutes');
 const sseRoute = require('./routes/sseRoute');
 const counterRoutes = require('./routes/counterRoutes');
+const corsTestRoute = require('./routes/corsTestRoute');
 const counterOperations = require('../api/counter-operations');
 const errorHandler = require('./middleware/errorHandler');
 const { corsConfig, validateCorsSetup } = require('./utils/corsConfig');
+const { applyMiddleware } = require('./utils/middleware');
 
 const app = express();
 
@@ -17,29 +19,20 @@ const app = express();
 validateCorsSetup();
 
 // Apply CORS middleware
-const corsMiddleware =
+const corsMiddleware = cors(
   process.env.NODE_ENV === 'development'
-    ? cors({ origin: 'http://localhost:8080', credentials: true })
-    : cors(corsConfig);
+    ? { origin: 'http://localhost:8080', credentials: true }
+    : corsConfig
+);
 
 app.use(corsMiddleware);
 app.options('*', corsMiddleware);
 
-// Debug logging middleware
-const logRequest = (req, res, next) => {
-  console.log(`Incoming request:`, {
-    method: req.method,
-    url: req.url,
-    origin: req.headers.origin,
-    'user-agent': req.headers['user-agent'],
-  });
-  next();
-};
-
-app.use(logRequest);
-
-// Middleware
+// Add JSON parsing middleware
 app.use(express.json());
+
+// Apply common middleware
+applyMiddleware(app);
 
 // Database connection middleware
 const connectDatabase = async (req, res, next) => {
@@ -58,6 +51,7 @@ const apiRoutes = {
   '/api/sse': sseRoute,
   '/api/counter-operations':
     process.env.NODE_ENV === 'production' ? counterOperations : counterRoutes,
+  '/api/cors-test': corsTestRoute,
 };
 
 Object.entries(apiRoutes).forEach(([path, router]) => {
@@ -65,23 +59,9 @@ Object.entries(apiRoutes).forEach(([path, router]) => {
 });
 
 // Additional routes
-const additionalRoutes = {
-  '/api/info/database-status': (req, res) => res.json({ status: 'connected' }),
-  '/api/cors-test': {
-    get: (req, res) => res.json({ message: 'CORS GET request successful' }),
-    post: (req, res) => res.json({ message: 'CORS POST request successful' }),
-  },
-};
-
-Object.entries(additionalRoutes).forEach(([path, handler]) => {
-  if (typeof handler === 'function') {
-    app.get(path, handler);
-  } else {
-    Object.entries(handler).forEach(([method, func]) => {
-      app[method](path, func);
-    });
-  }
-});
+app.get('/api/info/database-status', (req, res) =>
+  res.json({ status: 'connected' })
+);
 
 // Error handling middleware
 app.use(errorHandler);
@@ -92,8 +72,8 @@ const serverlessHandler = async (req, res) => {
   await app(req, res);
 };
 
-// Start server if not in a serverless environment
-if (process.env.NODE_ENV !== 'production') {
+// Start server if this file is run directly
+if (require.main === module) {
   const PORT = process.env.PORT || 3000;
   const server = http.createServer(app);
 
@@ -103,4 +83,5 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
+// Export the serverless handler for Vercel, otherwise export the app
 module.exports = process.env.VERCEL ? serverlessHandler : app;

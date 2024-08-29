@@ -8,12 +8,12 @@
     "server:dev": "cd server && npm run dev",
     "client:serve": "cd client && npm run serve",
     "start": "cd server && npm start",
-    "project-structure": "tree -L 9 -I 'node_modules|.git|.vscode|dist|*.css|*.map|*.woff*|*.svg|*.png|*.html|*.json|*.log'"
+    "project-structure": "tree -L 9 -I 'node_modules|.git|.vscode|dist' --prune | grep -E '^s*[│├└]|package.json|vercel.json'"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"
   },
   "dependencies": {
-    "vercel": "^37.2.1"
+    "vercel": "^32.3.0"
   }
 }
