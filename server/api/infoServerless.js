@@ -15,14 +15,15 @@ module.exports = async (req, res) => {
   try {
     await connectToDatabase();
 
-    const path = req.url.replace('/api', '');
+    // Use req.url directly, as Vercel strips the /api prefix
+    const path = req.url;
 
-    if (path.startsWith('/info/database-status')) {
+    if (path === '/info/database-status') {
       res.json(infoService.getDatabaseStatus());
-    } else if (path.startsWith('/info/health')) {
+    } else if (path === '/info/health') {
       const healthCheck = await infoService.getHealthCheck();
       res.json(healthCheck);
-    } else if (path.startsWith('/info')) {
+    } else if (path === '/info') {
       res.json(infoService.getServerInfo());
     } else {
       res.status(404).json({ error: 'Not found' });
