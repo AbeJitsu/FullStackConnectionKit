@@ -64,15 +64,15 @@ export default {
         console.error('Error creating item:', error);
       }
     },
-async fetchItems() {
-  try {
-    const response = await apiCall('get', `${this.apiUrl}/api/items`);
-    this.items = Array.isArray(response) ? response : response.items || [];
-  } catch (error) {
-    console.error('Error fetching items:', error);
-    this.items = [];
-  }
-},
+    async fetchItems() {
+      try {
+        const response = await this.apiCall('get', `${this.apiUrl}/api/items`);
+        this.items = Array.isArray(response) ? response : response.items || [];
+      } catch (error) {
+        console.error('Error fetching items:', error);
+        this.items = [];
+      }
+    },
     async deleteItem(id) {
       try {
         await apiCall('delete', `${this.apiUrl}/api/items/${id}`);
@@ -84,3 +84,7 @@ async fetchItems() {
   }
 };
 </script>
+
+<style scoped>
+/* Add any component-specific styles here */
+</style>
