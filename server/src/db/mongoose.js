@@ -7,7 +7,7 @@ const connectDB = async () => {
   const options = {
     serverSelectionTimeoutMS: 5000,
     autoIndex: false,
-    maxPoolSize: 10,
+    maxPoolSize: 100,
     socketTimeoutMS: 45000,
     family: 4,
   };

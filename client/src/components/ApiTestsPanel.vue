@@ -47,13 +47,17 @@ export default {
       sseActive: false,
       sseStatus: '',
       eventSource: null,
+      reconnectTimeout: null,
       apiUrl: process.env.NODE_ENV === 'production'
         ? process.env.VUE_APP_API_URL_CLOUD
         : process.env.VUE_APP_API_URL_LOCAL
     };
   },
-  mounted() {
-    this.startSSE();
+  beforeDestroy() {
+    this.stopSSE();
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+    }
   },
   methods: {
     clearStatus() {
@@ -110,15 +114,18 @@ export default {
       }
     },
     startSSE() {
+      if (this.eventSource) {
+        this.stopSSE(); // Ensure any existing connection is closed
+      }
       this.eventSource = new EventSource(`${this.apiUrl}/api/sse`);
+      this.setupSSEListeners();
+    },
+    setupSSEListeners() {
       this.eventSource.onmessage = this.handleSSEMessage;
       this.eventSource.onerror = this.handleSSEError;
       this.eventSource.onopen = this.handleSSEOpen;
       
-      this.eventSource.addEventListener('counter-update', (event) => {
-        const data = JSON.parse(event.data);
-        this.counterStatus = `Counter '${data.name}' updated. New value: ${data.value}`;
-      });
+      this.eventSource.addEventListener('counter-update', this.handleCounterUpdate);
     },
     stopSSE() {
       if (this.eventSource) {
@@ -127,6 +134,10 @@ export default {
       }
       this.sseActive = false;
       this.sseStatus = 'SSE stopped';
+      if (this.reconnectTimeout) {
+        clearTimeout(this.reconnectTimeout);
+        this.reconnectTimeout = null;
+      }
     },
     handleSSEMessage(event) {
       console.log('SSE message received:', event.data);
@@ -142,14 +153,10 @@ export default {
       console.error('SSE Error:', error);
       console.error('SSE readyState:', this.eventSource?.readyState);
       this.sseStatus = `SSE connection failed: ${error.message || 'Unknown error'}`;
-      this.sseActive = false;
-      if (this.eventSource) {
-        this.eventSource.close();
-        this.eventSource = null;
-      }
+      this.stopSSE();
       
       // Attempt to reconnect after 5 seconds
-      setTimeout(() => {
+      this.reconnectTimeout = setTimeout(() => {
         if (!this.sseActive) {
           this.startSSE();
         }
@@ -159,6 +166,10 @@ export default {
       console.log('SSE connection opened');
       this.sseActive = true;
       this.sseStatus = 'SSE started';
+    },
+    handleCounterUpdate(event) {
+      const data = JSON.parse(event.data);
+      this.counterStatus = `Counter '${data.name}' updated. New value: ${data.value}`;
     },
     handleError(testName, error) {
       const errorMessage = `${testName} failed: ${error.response?.status} ${error.response?.statusText || error.message}`;
@@ -215,5 +226,3 @@ export default {
   font-style: italic;
 }
 </style>
-
-<!-- // End of file: ./client/src/components/ApiTestsPanel.vue -->

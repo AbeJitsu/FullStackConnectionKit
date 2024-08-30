@@ -10,7 +10,11 @@ const corsOptions = {
     console.log('Received request from origin:', origin);
     console.log('Allowed origins:', allowedOrigins);
 
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (process.env.CORS_TESTING === 'true') {
+      console.log('CORS testing mode enabled. Allowing all origins.');
+      callback(null, true);
+    } else if (!origin || allowedOrigins.includes(origin)) {
+      console.log(`Origin ${origin} is allowed.`);
       callback(null, true);
     } else {
       console.warn(`CORS warning: Origin ${origin} not allowed`);
@@ -47,8 +51,15 @@ const handleCors = (app) => {
   app.use((req, res, next) => {
     if (process.env.CORS_TESTING === 'true') {
       res.header('Access-Control-Allow-Origin', '*');
+      console.log('CORS testing mode: Allow-Origin set to *');
     } else {
-      res.header('Access-Control-Allow-Origin', allowedOrigins.join(', '));
+      const origin = req.headers.origin;
+      if (allowedOrigins.includes(origin)) {
+        res.header('Access-Control-Allow-Origin', origin);
+        console.log(`Access-Control-Allow-Origin set to: ${origin}`);
+      } else {
+        console.warn(`Origin not allowed: ${origin}`);
+      }
     }
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header(
@@ -81,6 +92,9 @@ const validateCorsSetup = () => {
       'WARNING: CORS testing mode is enabled. Do not use in production!'
     );
   }
+
+  console.log('CORS configuration validated successfully');
+  console.log('Allowed origins:', allowedOrigins);
 };
 
 module.exports = { corsMiddleware, handleCors, validateCorsSetup };
