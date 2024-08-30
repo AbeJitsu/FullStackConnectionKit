@@ -5,7 +5,9 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "project-structure": "tree -L 9 -I 'node_modules|.git|.vscode|dist' --prune | grep -E '^s*[│├└]|package.json|vercel.json'"
+    "project-structure": "tree -L 9 -I 'node_modules|.git|.vscode|dist' --prune | grep -E '^s*[│├└]|package.json|vercel.json'",
+    "test": "jest",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -16,7 +18,9 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "jest": "^29.5.0",
+    "nodemon": "^3.1.0",
+    "supertest": "^6.3.3"
   },
   "engines": {
     "node": ">=14.0.0"

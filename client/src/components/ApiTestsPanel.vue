@@ -133,11 +133,6 @@ export default {
         this.eventSource = null;
       }
       this.sseActive = false;
-      this.sseStatus = 'SSE stopped';
-      if (this.reconnectTimeout) {
-        clearTimeout(this.reconnectTimeout);
-        this.reconnectTimeout = null;
-      }
     },
     handleSSEMessage(event) {
       console.log('SSE message received:', event.data);
@@ -153,9 +148,21 @@ export default {
       console.error('SSE Error:', error);
       console.error('SSE readyState:', this.eventSource?.readyState);
       this.sseStatus = `SSE connection failed: ${error.message || 'Unknown error'}`;
-      this.stopSSE();
+      this.sseActive = false;
       
-      // Attempt to reconnect after 5 seconds
+      if (this.eventSource) {
+        this.eventSource.close();
+        this.eventSource = null;
+      }
+      
+      this.$nextTick(() => {
+        this.scheduleReconnect();
+      });
+    },
+    scheduleReconnect() {
+      if (this.reconnectTimeout) {
+        clearTimeout(this.reconnectTimeout);
+      }
       this.reconnectTimeout = setTimeout(() => {
         if (!this.sseActive) {
           this.startSSE();

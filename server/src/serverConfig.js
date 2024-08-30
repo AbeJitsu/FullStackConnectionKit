@@ -2,7 +2,6 @@
 
 const express = require('express');
 const cors = require('cors');
-const connectDB = require('./db/mongoose');
 const { corsConfig, validateCorsSetup } = require('./utils/corsConfig');
 const errorHandler = require('./middleware/errorHandler');
 const { applyMiddleware } = require('./utils/middleware');
@@ -14,6 +13,12 @@ const counterRoutes = require('./routes/counterRoutes');
 const corsTestRoute = require('./routes/corsTestRoute');
 const counterOperations = require('../api/counter-operations');
 
+// Environment detection
+const isVercel = process.env.VERCEL === '1';
+const isProduction =
+  process.env.NODE_ENV === 'production' ||
+  (isVercel && process.env.VERCEL_ENV === 'production');
+
 function createApp() {
   const app = express();
 
@@ -21,12 +26,7 @@ function createApp() {
   validateCorsSetup();
 
   // Apply CORS middleware
-  const corsMiddleware = cors(
-    process.env.NODE_ENV === 'development'
-      ? { origin: 'http://localhost:8080', credentials: true }
-      : corsConfig
-  );
-
+  const corsMiddleware = cors(corsConfig);
   app.use(corsMiddleware);
   app.options('*', corsMiddleware);
 
@@ -36,23 +36,12 @@ function createApp() {
   // Apply common middleware
   applyMiddleware(app);
 
-  // Database connection middleware
-  const connectDatabase = async (req, res, next) => {
-    if (!global.mongoose) {
-      global.mongoose = await connectDB();
-    }
-    next();
-  };
-
-  app.use(connectDatabase);
-
   // Apply routes
   const apiRoutes = {
     '/api/info': infoRoutes,
     '/api/items': itemRoutes,
     '/api/sse': sseRoute,
-    '/api/counter-operations':
-      process.env.NODE_ENV === 'production' ? counterOperations : counterRoutes,
+    '/api/counter-operations': isProduction ? counterOperations : counterRoutes,
     '/api/cors-test': corsTestRoute,
   };
 
