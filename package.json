@@ -8,7 +8,7 @@
     "server:dev": "cd server && npm run dev",
     "client:serve": "cd client && npm run serve",
     "start": "cd server && npm start",
-    "project-structure": "tree -L 9 -I 'node_modules|.git|.vscode|dist' --prune | grep -E '^s*[│├└]|package.json|vercel.json'"
+    "project-tree": "tree -L 9 -I 'node_modules|.git|package-lock.json'"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"

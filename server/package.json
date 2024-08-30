@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "project-structure": "tree -L 9 -I 'node_modules|.git|.vscode|dist' --prune | grep -E '^s*[│├└]|package.json|vercel.json'",
+    "project-tree": "tree -L 9 -I 'node_modules|.git|package-lock.json'",
     "test": "jest",
     "test:coverage": "jest --coverage"
   },

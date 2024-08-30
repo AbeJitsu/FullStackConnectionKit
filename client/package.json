@@ -6,7 +6,7 @@
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
     "test:unit": "vue-cli-service test:unit",
-    "project-structure": "tree -L 9 -I 'node_modules|.git|.vscode|dist' --prune | grep -v 'node_modules' | grep -E '^[│├└]|package.json|vue.config.js|.vue$|.js$'"
+    "project-tree": "tree -L 9 -I 'node_modules|.git|package-lock.json'"
   },
   "dependencies": {
     "@vue/cli-plugin-babel": "~5.0.0",
