@@ -64,9 +64,9 @@ export default {
         console.error('Error creating item:', error);
       }
     },
-    async fetchItems() {
+async fetchItems() {
   try {
-    const response = await this.apiCall('get', `${this.apiUrl}/api/items`);
+    const response = await apiCall('get', `${this.apiUrl}/api/items`);
     this.items = Array.isArray(response) ? response : response.items || [];
   } catch (error) {
     console.error('Error fetching items:', error);

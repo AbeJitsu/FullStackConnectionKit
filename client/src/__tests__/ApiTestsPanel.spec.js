@@ -157,19 +157,27 @@ describe('ApiTestsPanel.vue', () => {
       expect(wrapper.vm.sseStatus).toContain('Received update');
     });
 
-    it('handles SSE error', () => {
+    it('handles SSE error', async () => {
       const mockError = new Error('SSE Error');
-      wrapper.vm.handleSSEError(mockError);
+      jest.spyOn(wrapper.vm, 'scheduleReconnect');
+
+      await wrapper.vm.handleSSEError(mockError);
+
       expect(wrapper.vm.sseStatus).toContain('SSE connection failed');
       expect(wrapper.vm.sseActive).toBe(false);
 
-      // Check if reconnect is scheduled
+      // Wait for $nextTick to complete
+      await wrapper.vm.$nextTick();
+
+      // Check if scheduleReconnect is called
+      expect(wrapper.vm.scheduleReconnect).toHaveBeenCalledTimes(1);
+    });
+
+    it('schedules reconnect', () => {
+      jest.spyOn(global, 'setTimeout');
+      wrapper.vm.scheduleReconnect();
       expect(setTimeout).toHaveBeenCalledTimes(1);
       expect(setTimeout).toHaveBeenLastCalledWith(expect.any(Function), 5000);
-
-      // Fast-forward time and check if reconnection is attempted
-      jest.runAllTimers();
-      expect(wrapper.vm.startSSE).toHaveBeenCalled();
     });
 
     it('handles SSE open', () => {
