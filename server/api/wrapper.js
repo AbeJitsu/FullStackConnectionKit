@@ -1,12 +1,12 @@
 // server/api/wrapper.js
 const { applyMiddleware } = require('../src/utils/middleware');
-const connectDB = require('../src/db/mongoose');
+const connectToDatabase = require('../src/db/mongoose');
 
 const createHandler = (handler) => {
   return applyMiddleware(async (req, res) => {
     try {
       // Ensure database connection
-      await connectDB();
+      await connectToDatabase();
 
       // Your serverless function logic here
       await handler(req, res);
@@ -28,7 +28,7 @@ const createSSEHandler = (handler) => {
   return applyMiddleware(async (req, res) => {
     try {
       // Ensure database connection
-      await connectDB();
+      await connectToDatabase();
 
       // Set headers for SSE
       res.writeHead(200, {

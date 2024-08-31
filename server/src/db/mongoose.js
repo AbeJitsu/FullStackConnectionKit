@@ -11,7 +11,7 @@ const getMongoUri = () => {
     : process.env.SERVER_LOCAL_DATABASE_URL;
 };
 
-const connectDB = async () => {
+const connectToDatabase = async () => {
   if (connection) {
     return connection;
   }
@@ -70,4 +70,4 @@ const connectDB = async () => {
   }
 };
 
-module.exports = connectDB;
+module.exports = connectToDatabase;

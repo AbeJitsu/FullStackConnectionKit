@@ -1,13 +1,13 @@
 // server/api/items.js
 const mongoose = require('mongoose');
 const Item = require('../src/models/Item');
-const connectDB = require('../src/db/mongoose');
+const connectToDatabase = require('../src/db/mongoose');
 
 let isConnected = false;
 
 const connectToDatabase = async () => {
   if (isConnected) return;
-  await connectDB();
+  await connectToDatabase();
   isConnected = true;
 };
 

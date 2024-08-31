@@ -138,7 +138,9 @@ export default {
       } catch (error) {
         console.error(`Error in API call (${method} ${url}):`, error);
         if (error.response) {
+          console.error('Response status:', error.response.status);
           console.error('Response data:', error.response.data);
+          console.error('Response headers:', error.response.headers);
         }
         throw error;
       }
@@ -151,6 +153,7 @@ export default {
         this.connectionStatus = 'Connected successfully';
       } catch (error) {
         this.connectionStatus = `Error connecting to server: ${error.response?.status} ${error.response?.statusText || error.message}`;
+        console.error('Detailed error:', error);
       }
     },
     async createItem() {
@@ -194,5 +197,4 @@ export default {
 <style scoped>
 @import '../styles/sharedStyles.css';
 </style>
-
 <!-- End of file: ./client/src/components/ApiTester.vue -->
